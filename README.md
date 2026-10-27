@@ -41,6 +41,13 @@ Either way the change ends up on GitHub.
 5. In Xepher, open settings (⚙), paste the GitHub token. The cloud runner repo fills itself in as `<you>/xepher`.
 6. Windows only, optional: "Show my terminal Claude sessions too" adds hooks to `~/.claude/settings.json` so the robot also reacts while you use Claude Code in a terminal. A backup is saved next to it as `settings.json.before-xepher`.
 
+## Updates
+
+Every push to `main` builds a new release, and the installed apps pick it up on their own (they check at start and every 6 hours, using your GitHub token because the repo is private):
+
+- **Windows** downloads it in the background, shows "Restart to update", and installs it on restart (or next time you quit).
+- **Android** shows "Xepher x is out → Update", downloads it, and Android asks you to confirm the install. The first time, Android also asks you to allow Xepher to install apps. The bubble comes back by itself after the update.
+
 ## Developing
 
 ```

@@ -25,4 +25,7 @@ contextBridge.exposeInMainWorld("xepherDesktop", {
   onHotkey: (cb) => ipcRenderer.on("hotkey", () => cb()),
   hooksInstalled: () => ipcRenderer.invoke("hooks-installed"),
   installHooks: () => ipcRenderer.invoke("install-hooks"),
+  checkUpdates: (repo, token) => ipcRenderer.send("check-updates", String(repo), String(token)),
+  onUpdateReady: (cb) => ipcRenderer.on("update-ready", (_e, version) => cb(version)),
+  installUpdate: () => ipcRenderer.send("install-update"),
 });

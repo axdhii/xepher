@@ -78,6 +78,14 @@ export async function addProject(owner: string, name: string): Promise<Project> 
   return pick(repo);
 }
 
+// The newest app build. Release tags are v1.0.<build>, and <build> is also the Android versionCode.
+export async function latestRelease(runner: string) {
+  const r = await api(`/repos/${runner}/releases/latest`);
+  const build = Number(String(r.tag_name).split(".").pop());
+  const apk = r.assets.find((a: any) => a.name.endsWith(".apk"));
+  return { build, version: String(r.tag_name).replace(/^v/, ""), apkUrl: apk?.url as string | undefined };
+}
+
 export const setLink = (fullName: string, url: string) =>
   api(`/repos/${fullName}`, { method: "PATCH", body: JSON.stringify({ homepage: url }) });
 

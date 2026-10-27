@@ -18,6 +18,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.provider.Settings;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -256,6 +257,39 @@ public class OverlayService extends Service {
         public void listen() {
             main.post(OverlayService.this::listen);
         }
+
+        @JavascriptInterface
+        public long version() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
+            } catch (Exception e) {
+                return 0;
+            }
+        }
+
+        @JavascriptInterface
+        public void installUpdate(String assetUrl, String token) {
+            if (assetUrl == null || !assetUrl.startsWith("https://api.github.com/repos/")) return;
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                // One-time: Android must allow Xepher to install its own updates.
+                updateStatus("Allow Xepher to install apps, then tap Update again.");
+                main.post(() -> startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+                return;
+            }
+            new Thread(() -> {
+                try {
+                    Updater.install(OverlayService.this, assetUrl, token);
+                    updateStatus("Confirm the update on screen. Xepher restarts by itself.");
+                } catch (Exception e) {
+                    updateStatus("Update failed: " + e.getMessage());
+                }
+            }).start();
+        }
+    }
+
+    private void updateStatus(String text) {
+        js("window.__xepherUpdate && window.__xepherUpdate(" + JSONObject.quote(text) + ")");
     }
 
     private void listen() {

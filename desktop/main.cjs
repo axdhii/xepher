@@ -8,6 +8,7 @@ const fs = require("fs");
 const hooks = require("./hooks.cjs");
 const { hookStatus } = require("./claude-events.cjs");
 const { runJob } = require("./runner.cjs");
+const { autoUpdater } = require("electron-updater");
 
 const BUBBLE = { width: 150, height: 150 };
 const PANEL = { width: 390, height: 600 };
@@ -117,6 +118,19 @@ ipcMain.handle("hooks-installed", () => {
   }
 });
 ipcMain.handle("install-hooks", () => hooks.install(CLAUDE_SETTINGS));
+
+// Updates come from this repo's GitHub releases. The repo is private, so the
+// renderer hands over the GitHub token it already keeps for everything else.
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.on("update-downloaded", (info) => win?.webContents.send("update-ready", info.version));
+autoUpdater.on("error", (e) => console.error("update:", e.message));
+ipcMain.on("check-updates", (_e, repo, token) => {
+  if (!app.isPackaged || !/^[\w.-]+\/[\w.-]+$/.test(repo) || !token) return;
+  const [owner, name] = repo.split("/");
+  autoUpdater.setFeedURL({ provider: "github", owner, repo: name, private: true, token });
+  autoUpdater.checkForUpdates().catch((e) => console.error("update:", e.message));
+});
+ipcMain.on("install-update", () => autoUpdater.quitAndInstall(true, true));
 
 // Claude Code hooks POST their event JSON here (see hooks.cjs).
 function startHookServer() {

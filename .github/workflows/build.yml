@@ -22,13 +22,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # The app's version is the build number, which is how the updater spots a newer release.
+      - run: npm version "1.0.${{ github.run_number }}" --no-git-tag-version
       - run: npm run dist:win
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             release/*.exe
-            release/*.zip
+            release/*.blockmap
+            release/latest.yml
 
   android:
     runs-on: ubuntu-latest
@@ -68,7 +71,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v1.0.${{ github.run_number }}" Xepher.apk *.exe *.zip \
+          gh release create "v1.0.${{ github.run_number }}" Xepher.apk *.exe *.blockmap latest.yml \
             --repo "${{ github.repository }}" --target "${{ github.sha }}" \
             --title "Xepher 1.0.${{ github.run_number }}" --latest \
-            --notes "Windows: run the Setup .exe. Android: install Xepher.apk. Setup steps are in the README."
+            --notes "Installed apps update themselves. First install: Windows runs the Setup .exe, Android installs Xepher.apk. Setup steps are in the README."

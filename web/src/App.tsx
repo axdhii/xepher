@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { robot, flash, say, poke, MODE_THINK, MODE_TALK, MODE_HAPPY, MODE_NOPE, MODE_LOVE, MODE_SURPRISED } from "./robot/state";
 import { parse, slug, findProject } from "./commands";
 import * as gh from "./github";
-import { desktop, platform, setExpanded, openLink, speak, listen } from "./bridge";
+import { desktop, android, platform, setExpanded, openLink, speak, listen } from "./bridge";
 
 const Scene = lazy(() => import("./robot/Scene"));
 
@@ -34,6 +34,7 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [hasClaude, setHasClaude] = useState(false);
   const [hooks, setHooks] = useState(false);
+  const [update, setUpdate] = useState<{ text: string; install?: () => void } | null>(null);
   const voiceArmed = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -64,6 +65,34 @@ export default function App() {
   useEffect(() => {
     refresh();
   }, [settings.token]);
+
+  // Updates: Windows downloads in the background and asks to restart; Android asks
+  // to install (Android always shows its own "Update this app?" confirmation).
+  useEffect(() => {
+    if (!settings.token || !settings.runner) return;
+    const check = async () => {
+      if (desktop) return desktop.checkUpdates(settings.runner, settings.token);
+      if (!android) return;
+      try {
+        const r = await gh.latestRelease(settings.runner);
+        if (r.apkUrl && r.build > android.version())
+          setUpdate({
+            text: `Xepher ${r.version} is out`,
+            install: () => {
+              setUpdate({ text: "Downloading the update…" });
+              android!.installUpdate(r.apkUrl!, settings.token);
+            },
+          });
+      } catch {} // offline or no release yet: try again next time
+    };
+    check();
+    const id = setInterval(check, 6 * 3600_000);
+    return () => clearInterval(id);
+  }, [settings.token, settings.runner]);
+  useEffect(() => {
+    desktop?.onUpdateReady((v) => setUpdate({ text: `Xepher ${v} is ready`, install: () => desktop!.installUpdate() }));
+    window.__xepherUpdate = (text) => setUpdate({ text });
+  }, []);
 
   useEffect(() => {
     if (!desktop) return;
@@ -270,7 +299,7 @@ export default function App() {
       <Suspense fallback={null}>
         <Scene />
       </Suspense>
-      {!expanded && (busy || listening) && <div className="dot" />}
+      {!expanded && (busy || listening || update?.install) && <div className="dot" />}
     </div>
   );
 
@@ -294,6 +323,14 @@ export default function App() {
       </header>
       {expanded && (
       <>
+
+      {update && (
+        <div className="update">
+          <span>{update.text}</span>
+          {update.install && <button className="primary" onClick={update.install}>{platform === "desktop" ? "Restart to update" : "Update"}</button>}
+          <button aria-label="Dismiss" onClick={() => setUpdate(null)}>✕</button>
+        </div>
+      )}
 
       {view === "chat" && (
         <div className="log" ref={logRef}>

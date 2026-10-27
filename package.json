@@ -11,7 +11,7 @@
     "typecheck": "tsc -p web --noEmit",
     "test": "node --experimental-strip-types --test web/src/*.test.ts desktop/*.test.cjs",
     "desktop": "npm run build && electron .",
-    "dist:win": "npm run build && electron-builder --win zip nsis --x64 --publish never"
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
   },
   "build": {
     "appId": "dev.xepher.app",
@@ -29,25 +29,34 @@
     },
     "nsis": {
       "oneClick": true,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "artifactName": "Xepher-Setup-${version}.${ext}"
     },
-    "publish": null
+    "publish": {
+      "provider": "github",
+      "owner": "axdhii",
+      "repo": "xepher",
+      "private": true
+    }
   },
   "devDependencies": {
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@react-three/postprocessing": "^3.2.2",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "three": "^0.186.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.186.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-singlefile": "^2.3.4"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

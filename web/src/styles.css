@@ -56,3 +56,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .input button { width: 42px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.07); display: grid; place-items: center; }
 .input button:disabled { opacity: 0.4; }
 .mic.on { background: var(--amber); color: #111; animation: pulse 0.8s infinite alternate; }
+
+.update { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255, 174, 74, 0.12); border-bottom: 1px solid rgba(255, 174, 74, 0.3); font-size: 13px; }
+.update span { flex: 1; }
+.update button { border: 1px solid rgba(255, 174, 74, 0.5); background: transparent; border-radius: 8px; padding: 4px 10px; }
+.update .primary { background: var(--amber); color: #111; border: 0; }

@@ -18,6 +18,9 @@ type Desktop = {
   onHotkey(cb: () => void): void; // Ctrl+Shift+X: open Xepher and start listening
   hooksInstalled(): Promise<boolean>;
   installHooks(): Promise<void>;
+  checkUpdates(repo: string, token: string): void; // downloads in the background
+  onUpdateReady(cb: (version: string) => void): void;
+  installUpdate(): void; // restarts into the new version
 };
 
 type AndroidNative = {
@@ -25,6 +28,8 @@ type AndroidNative = {
   listen(): void; // answers through window.__xepherSpeech
   speak(text: string): void;
   openLink(url: string): void;
+  version(): number; // versionCode, which is the build number in the release tag
+  installUpdate(assetApiUrl: string, token: string): void; // answers through window.__xepherUpdate
 };
 
 declare global {
@@ -33,12 +38,13 @@ declare global {
     XepherAndroid?: AndroidNative;
     __xepherSpeech?: (kind: "partial" | "final" | "error", text: string) => void;
     __xepherBack?: () => void; // Android back button
+    __xepherUpdate?: (status: string) => void; // Android update progress / errors
     __xepherFly?: (on: boolean, dir: number) => void; // Android bubble being dragged
   }
 }
 
 export const desktop = window.xepherDesktop;
-const android = window.XepherAndroid;
+export const android = window.XepherAndroid;
 export const platform: "desktop" | "android" | "web" = desktop ? "desktop" : android ? "android" : "web";
 
 export function setExpanded(expanded: boolean) {
