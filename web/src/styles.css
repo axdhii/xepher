@@ -1,0 +1,58 @@
+:root {
+  --font-mono: ui-monospace, "Cascadia Mono", "Consolas", "Roboto Mono", monospace;
+  --amber: #ffae4a;
+  --bg: rgba(18, 19, 22, 0.94);
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #ece8e0;
+  --dim: #9a968e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+body { font: 14px/1.4 system-ui, "Segoe UI", Roboto, sans-serif; color: var(--text); user-select: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* collapsed: the whole window is the robot */
+.bubble, .bubble header { width: 100%; height: 100%; }
+.robot { position: relative; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.robot:active { cursor: grabbing; }
+.dot { position: absolute; right: 18%; top: 14%; width: 10px; height: 10px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 10px var(--amber); animation: pulse 1s infinite alternate; }
+@keyframes pulse { to { opacity: 0.3; } }
+
+/* expanded */
+.panel { height: 100%; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.panel header { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 4px; border-bottom: 1px solid var(--line); }
+.robot.small { width: 92px; height: 84px; flex: none; }
+.head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.head-text b { font-family: var(--font-mono); letter-spacing: 0.12em; color: var(--amber); }
+.status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.where { font-size: 11px; color: var(--dim); }
+.head-buttons { display: flex; gap: 4px; }
+.head-buttons button { width: 32px; height: 32px; border-radius: 8px; border: 0; background: rgba(255,255,255,0.06); }
+.head-buttons button:hover { background: rgba(255,255,255,0.12); }
+
+.log, .list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; user-select: text; }
+.hint { color: var(--dim); margin: auto 0; text-align: center; }
+.line { max-width: 88%; padding: 8px 11px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+.line small { display: block; font-size: 10px; opacity: 0.6; }
+.line.you { align-self: flex-end; background: #2b2d33; }
+.line.xepher { align-self: flex-start; background: rgba(255, 174, 74, 0.1); border: 1px solid rgba(255, 174, 74, 0.25); }
+.line.error { align-self: flex-start; background: rgba(255, 80, 80, 0.12); border: 1px solid rgba(255, 80, 80, 0.3); }
+.typing { color: var(--amber); font-family: var(--font-mono); font-size: 12px; }
+
+.project { display: flex; gap: 6px; align-items: center; }
+.project button { border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+.project .name { flex: 1; text-align: left; font-size: 14px; }
+.project.on .name { border-color: var(--amber); color: var(--amber); }
+.wide { border: 1px solid var(--line); background: rgba(255,255,255,0.05); border-radius: 10px; padding: 9px; }
+.wide:disabled { opacity: 0.6; cursor: default; }
+.settings label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); }
+.settings label.row { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 13px; }
+.settings input:not([type="checkbox"]) { background: #0d0e10; border: 1px solid var(--line); border-radius: 8px; padding: 8px; color: var(--text); font: 13px var(--font-mono); }
+
+.input { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--line); }
+.input input { flex: 1; min-width: 0; background: #0d0e10; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; color: var(--text); font: inherit; outline: none; }
+.input input:focus { border-color: rgba(255,174,74,0.5); }
+.input button { width: 42px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.07); display: grid; place-items: center; }
+.input button:disabled { opacity: 0.4; }
+.mic.on { background: var(--amber); color: #111; animation: pulse 0.8s infinite alternate; }

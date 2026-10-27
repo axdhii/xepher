@@ -1,0 +1,74 @@
+# Builds the Windows installer and the Android APK on every push to main
+# and publishes them as a GitHub release. Download from the Releases page.
+name: Build apps
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            release/*.exe
+            release/*.zip
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Build APK
+        env:
+          XEPHER_BUILD: ${{ github.run_number }}
+        run: gradle -p android assembleRelease
+      - run: cp android/app/build/outputs/apk/release/app-release.apk Xepher.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: Xepher.apk
+
+  release:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" Xepher.apk *.exe *.zip \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "Xepher 1.0.${{ github.run_number }}" --latest \
+            --notes "Windows: run the Setup .exe. Android: install Xepher.apk. Setup steps are in the README."

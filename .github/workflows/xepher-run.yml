@@ -1,0 +1,76 @@
+# Runs one Xepher command in the cloud, so commands work with the laptop off.
+# The app starts it with workflow_dispatch; cloud/relay.cjs does the work.
+#
+# Needs two repository secrets on this repo (Settings > Secrets and variables > Actions):
+#   CLAUDE_CODE_OAUTH_TOKEN  from `claude setup-token` (uses your Claude subscription, no API key)
+#   XEPHER_GH_TOKEN          a classic GitHub token with the repo and workflow scopes
+name: Xepher run
+run-name: "xepher ${{ inputs.id }}: ${{ inputs.repo }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: Project repo (owner/name)
+        required: true
+      prompt:
+        description: What to do
+        required: true
+      id:
+        description: Job id the app watches for
+        required: true
+
+# One command at a time per project; the next one waits its turn.
+concurrency:
+  group: xepher-${{ inputs.repo }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore Claude conversation for this project
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.claude/projects
+          key: claude/${{ inputs.repo }}/${{ github.run_id }}
+          restore-keys: claude/${{ inputs.repo }}/
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Git identity and access
+        env:
+          XEPHER_GH_TOKEN: ${{ secrets.XEPHER_GH_TOKEN }}
+        run: |
+          git config --global user.name "Xepher"
+          git config --global user.email "xepher@users.noreply.github.com"
+          git config --global url."https://x-access-token:${XEPHER_GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Run Claude Code
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          XEPHER_GH_TOKEN: ${{ secrets.XEPHER_GH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          PROMPT: ${{ inputs.prompt }}
+          JOB_ID: ${{ inputs.id }}
+          PROJECT: ${{ inputs.repo }}
+        run: node cloud/relay.cjs
+
+      - name: Save Claude conversation
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.claude/projects
+          key: claude/${{ inputs.repo }}/${{ github.run_id }}

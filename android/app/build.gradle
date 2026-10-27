@@ -1,0 +1,44 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "dev.xepher"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "dev.xepher"
+        minSdk 26
+        targetSdk 35
+        versionCode Integer.parseInt(System.getenv("XEPHER_BUILD") ?: "1")
+        versionName "1.0." + (System.getenv("XEPHER_BUILD") ?: "0")
+    }
+
+    // One fixed key, so each new APK installs over the last one.
+    // shortcut: the key is in the repo (fine for a private, personal app); move it to a secret before sharing Xepher
+    signingConfigs {
+        xepher {
+            storeFile file("xepher.keystore")
+            storePassword "xepher"
+            keyAlias "xepher"
+            keyPassword "xepher"
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.xepher
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// The UI is the same single-file web build the Windows app uses.
+tasks.register("copyWebUi", Copy) {
+    from "../../dist/index.html"
+    into "src/main/assets"
+}
+preBuild.dependsOn "copyWebUi"
