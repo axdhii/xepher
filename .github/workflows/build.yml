@@ -25,6 +25,9 @@ jobs:
       # The app's version is the build number, which is how the updater spots a newer release.
       - run: npm version "1.0.${{ github.run_number }}" --no-git-tag-version
       - run: npm run dist:win
+        env:
+          # Baked into the app so it can read this private repo's releases.
+          VITE_XEPHER_TOKEN: ${{ secrets.XEPHER_UPDATE_TOKEN || secrets.XEPHER_GH_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -43,6 +46,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # Baked into the app so it can read this private repo's releases.
+          VITE_XEPHER_TOKEN: ${{ secrets.XEPHER_UPDATE_TOKEN || secrets.XEPHER_GH_TOKEN }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
