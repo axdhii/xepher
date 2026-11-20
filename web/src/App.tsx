@@ -7,7 +7,9 @@ import { MatrixRain, Breach } from "./Hacker";
 const Scene = lazy(() => import("./robot/Scene"));
 const Console = lazy(() => import("./hack/Console"));
 
-// The GitHub token is only for updates: the repo is private.
+// The GitHub token is only for updates: the repo is private. Builds from CI carry
+// one, so nothing needs pasting; CFG can override it.
+const BUILT_IN_TOKEN = import.meta.env.VITE_XEPHER_TOKEN ?? "";
 type Settings = { token: string; runner: string; voice: boolean; sound: boolean };
 
 function load<T>(key: string, fallback: T): T {
@@ -32,10 +34,11 @@ export default function App() {
   // Updates: Windows downloads in the background and asks to restart; Android asks
   // to install (Android always shows its own "Update this app?" confirmation).
   useEffect(() => {
-    if (!settings.token || !settings.runner) return;
-    gh.setToken(settings.token);
+    const token = settings.token.trim() || BUILT_IN_TOKEN;
+    if (!token || !settings.runner) return;
+    gh.setToken(token);
     const check = async () => {
-      if (desktop) return desktop.checkUpdates(settings.runner, settings.token);
+      if (desktop) return desktop.checkUpdates(settings.runner, token);
       if (!android) return;
       try {
         const r = await gh.latestRelease(settings.runner);
@@ -44,7 +47,7 @@ export default function App() {
             text: `Xepher ${r.version} is out`,
             install: () => {
               setUpdate({ text: "Downloading the update…" });
-              android!.installUpdate(r.apkUrl!, settings.token);
+              android!.installUpdate(r.apkUrl!, token);
             },
           });
       } catch {} // offline or no release yet: try again next time
@@ -157,7 +160,7 @@ export default function App() {
           {cfg ? (
             <div className="list settings">
               <label>
-                GitHub token (for updates; classic, scope: repo)
+                GitHub token for updates (optional, one is built in)
                 <input type="password" value={settings.token} onChange={(e) => setSettings({ ...settings, token: e.target.value })} placeholder="ghp_…" />
               </label>
               <label>
