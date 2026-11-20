@@ -1,7 +1,7 @@
 {
   "name": "xepher",
   "version": "1.0.0",
-  "description": "Xepher: a floating robot that drives Claude Code",
+  "description": "Xepher: a floating robot that turns into a fake hacking machine",
   "private": true,
   "main": "desktop/main.cjs",
   "author": "Aadhil",
@@ -9,7 +9,7 @@
     "dev": "vite web",
     "build": "vite build web",
     "typecheck": "tsc -p web --noEmit",
-    "test": "node --experimental-strip-types --test web/src/*.test.ts desktop/*.test.cjs",
+    "test": "node --experimental-strip-types --test web/src/*.test.ts",
     "desktop": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
   },

@@ -73,60 +73,19 @@ export function Breach({ onDone }: { onDone: () => void }) {
   );
 }
 
-// Types text out a few characters at a time.
-export function Typed({ text }: { text: string }) {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    if (n >= text.length) return;
-    const t = setTimeout(() => setN(n + Math.max(1, Math.ceil(text.length / 120))), 14);
-    return () => clearTimeout(t);
-  }, [n, text]);
-  return <>{text.slice(0, n)}{n < text.length && <span className="cursor" />}</>;
-}
-
-const HACKS = [
-  (p: string) => `[+] injecting payload into ${p}/src`,
-  () => `[+] decrypting packet 0x${hex(8)}`,
-  () => `[~] tracing route via ${ip()}`,
-  () => `[+] buffer overflow at 0x${hex(6)} ... contained`,
-  (p: string) => `[+] compiling exploits for ${p}`,
-  () => `[~] rerouting satellite uplink ${Math.floor(Math.random() * 99)}%`,
-  () => `[+] brute forcing hash ${hex(16)}`,
-  () => "[!] intrusion countermeasures detected, evading",
-] as const;
-
-// Fake activity that scrolls under the real status while a job runs.
-export function HackLog({ project }: { project: string }) {
-  const [lines, setLines] = useState<string[]>([]);
-  useEffect(() => {
-    const id = setInterval(() => setLines((l) => [...l.slice(-3), pick(HACKS)(project)]), 650);
-    return () => clearInterval(id);
-  }, [project]);
-  return (
-    <div className="hacklog" aria-hidden>
-      {lines.map((l, i) => (
-        <div key={i + l}>{l}</div>
-      ))}
-    </div>
-  );
-}
-
-// Fake live readouts for the status bar.
-export function Readout() {
-  const [s, setS] = useState({ ip: ip(), ping: 12, cpu: 40, enc: hex(4) });
-  useEffect(() => {
-    const id = setInterval(
-      () => setS((o) => ({ ip: Math.random() < 0.15 ? ip() : o.ip, ping: 8 + Math.floor(Math.random() * 30), cpu: 20 + Math.floor(Math.random() * 79), enc: hex(4) })),
-      900,
-    );
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div className="readout" aria-hidden>
-      <span>IP {s.ip}</span>
-      <span>PING {s.ping}ms</span>
-      <span>CPU {s.cpu}%</span>
-      <span>AES-256 {s.enc}</span>
-    </div>
-  );
+// A tiny synth for blips and alarms. Created on first use (after a tap).
+let audio: AudioContext | null = null;
+export function beep(freq: number, seconds: number, type: OscillatorType = "square", volume = 0.06) {
+  try {
+    audio ??= new AudioContext();
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(volume, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + seconds);
+    o.connect(g).connect(audio.destination);
+    o.start();
+    o.stop(audio.currentTime + seconds);
+  } catch {} // no audio device: stay silent
 }

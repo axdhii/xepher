@@ -1,14 +1,14 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { robot, flash, say, poke, MODE_THINK, MODE_TALK, MODE_HAPPY, MODE_NOPE, MODE_LOVE, MODE_SURPRISED } from "./robot/state";
-import { parse, slug, findProject } from "./commands";
+import { robot, poke } from "./robot/state";
 import * as gh from "./github";
-import { desktop, android, platform, setExpanded, openLink, speak, listen } from "./bridge";
-import { MatrixRain, Breach, Typed, HackLog, Readout } from "./Hacker";
+import { desktop, android, platform, setExpanded, speak } from "./bridge";
+import { MatrixRain, Breach } from "./Hacker";
 
 const Scene = lazy(() => import("./robot/Scene"));
+const Console = lazy(() => import("./hack/Console"));
 
-type Settings = { token: string; runner: string; mode: "local" | "cloud"; fullAccess: boolean; speakReplies: boolean };
-type Line = { who: "you" | "xepher" | "error"; text: string; project?: string };
+// The GitHub token is only for updates: the repo is private.
+type Settings = { token: string; runner: string; voice: boolean; sound: boolean };
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -17,61 +17,23 @@ function load<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
-// shortcut: settings (including the GitHub token) live in the app's private storage, not an OS keychain
+// shortcut: the GitHub token lives in the app's private storage, not an OS keychain
 const save = (key: string, value: unknown) => localStorage.setItem(key, JSON.stringify(value));
 
 export default function App() {
-  const [settings, setSettings] = useState<Settings>(() =>
-    load("xepher.settings", { token: "", runner: "", mode: "local", fullAccess: false, speakReplies: true }),
-  );
-  const [projects, setProjects] = useState<gh.Project[]>([]);
-  const [current, setCurrent] = useState<string>(() => localStorage.getItem("xepher.current") ?? "");
-  const [log, setLog] = useState<Line[]>(() => load<{ lines: Line[] }>("xepher.log", { lines: [] }).lines);
+  const [settings, setSettings] = useState<Settings>(() => load("xepher.settings", { token: "", runner: "axdhii/xepher", voice: true, sound: true }));
   const [expanded, setExpandedState] = useState(false);
   const [breach, setBreach] = useState(false);
-  const [view, setView] = useState<"chat" | "projects" | "settings">(settings.token ? "chat" : "settings");
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("");
-  const [listening, setListening] = useState(false);
-  const [hasClaude, setHasClaude] = useState(false);
-  const [hooks, setHooks] = useState(false);
+  const [cfg, setCfg] = useState(false);
   const [update, setUpdate] = useState<{ text: string; install?: () => void } | null>(null);
-  const voiceArmed = useRef(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const logRef = useRef<HTMLDivElement>(null);
-  const project = projects.find((p) => p.full_name === current);
-  const runsLocally = platform === "desktop" && settings.mode === "local" && hasClaude;
 
   useEffect(() => save("xepher.settings", settings), [settings]);
-  useEffect(() => localStorage.setItem("xepher.current", current), [current]);
-  useEffect(() => {
-    save("xepher.log", { lines: log.slice(-60) });
-    logRef.current?.scrollTo(0, logRef.current.scrollHeight);
-  }, [log]);
-
-  const add = (who: Line["who"], text: string) => setLog((l) => [...l, { who, text, project: project?.name }]);
-
-  async function refresh() {
-    gh.setToken(settings.token);
-    if (!settings.token) return;
-    try {
-      const [login, list] = await Promise.all([gh.me(), gh.listProjects()]);
-      setProjects(list);
-      if (!settings.runner) setSettings((s) => ({ ...s, runner: `${login}/xepher` }));
-      if (!list.some((p) => p.full_name === current) && list[0]) setCurrent(list[0].full_name);
-    } catch (e: any) {
-      add("error", e.message);
-    }
-  }
-  useEffect(() => {
-    refresh();
-  }, [settings.token]);
 
   // Updates: Windows downloads in the background and asks to restart; Android asks
   // to install (Android always shows its own "Update this app?" confirmation).
   useEffect(() => {
     if (!settings.token || !settings.runner) return;
+    gh.setToken(settings.token);
     const check = async () => {
       if (desktop) return desktop.checkUpdates(settings.runner, settings.token);
       if (!android) return;
@@ -94,28 +56,7 @@ export default function App() {
   useEffect(() => {
     desktop?.onUpdateReady((v) => setUpdate({ text: `Xepher ${v} is ready`, install: () => desktop!.installUpdate() }));
     window.__xepherUpdate = (text) => setUpdate({ text });
-  }, []);
-
-  useEffect(() => {
-    if (!desktop) return;
-    desktop.hasClaude().then(setHasClaude);
-    desktop.hooksInstalled().then(setHooks);
-    // Claude Code sessions Aadhil runs himself in a terminal report here through hooks.
-    desktop.onHookStatus(({ busy: b, text }) => {
-      if (busyRef.current) return; // a Xepher job owns the robot right now
-      robot.activity = b ? MODE_THINK : null;
-      setStatus(b ? text : "");
-      if (!b) flash(MODE_HAPPY, 1.5);
-    });
-    desktop.onHotkey(() => {
-      expand(true);
-      setTimeout(startVoice, 150);
-    });
-  }, []);
-  const busyRef = useRef(false);
-  busyRef.current = busy;
-
-  useEffect(() => {
+    desktop?.onHotkey(() => expand(true));
     window.__xepherBack = () => expand(false);
     window.__xepherFly = (on, dir) => {
       robot.flying = on;
@@ -139,128 +80,6 @@ export default function App() {
     setExpanded(on);
     poke();
   }
-
-  async function run(textIn: string) {
-    const text = textIn.trim();
-    if (!text || busy) return;
-    setInput("");
-    add("you", text);
-    robot.lastActivity = performance.now() / 1000;
-    const action = parse(text);
-    try {
-      if (action.kind === "switch") {
-        const p = findProject(projects, action.name);
-        if (!p) return add("xepher", `I can't find "${action.name}". Say "create project ${action.name}" to make it.`);
-        setCurrent(p.full_name);
-        say(p.name);
-        return add("xepher", `Switched to ${p.name}.`);
-      }
-      if (action.kind === "projects") {
-        setView("projects");
-        return expand(true);
-      }
-      if (action.kind === "create" || action.kind === "add") {
-        const name = slug(action.name);
-        if (!name) return add("error", "That name has no letters or numbers in it.");
-        setBusy(true);
-        setStatus(action.kind === "create" ? `Creating ${name} on GitHub…` : `Adding ${name}…`);
-        robot.activity = MODE_THINK;
-        const p = action.kind === "create" ? await gh.createProject(name) : await gh.addProject((await gh.me()), name);
-        setProjects((ps) => [p, ...ps.filter((x) => x.full_name !== p.full_name)]);
-        setCurrent(p.full_name);
-        flash(MODE_LOVE, 2);
-        return add("xepher", `${p.name} is ready: ${p.html_url}`);
-      }
-      if (action.kind === "link") {
-        if (!project) return add("xepher", "Pick a project first.");
-        if (action.url) {
-          await gh.setLink(project.full_name, action.url);
-          setProjects((ps) => ps.map((p) => (p.full_name === project.full_name ? { ...p, homepage: action.url! } : p)));
-          return add("xepher", `Saved the Claude link for ${project.name}.`);
-        }
-        if (!project.homepage) return add("xepher", `No Claude link for ${project.name} yet. Say "set link to https://claude.ai/project/…".`);
-        return openLink(project.homepage);
-      }
-
-      // Everything else is a job for Claude Code on the current project.
-      if (!project) return add("xepher", "Pick or create a project first.");
-      setBusy(true);
-      robot.activity = MODE_THINK;
-      say("HACKING", 1.4);
-      setStatus("Starting…");
-      let reply = "";
-      if (runsLocally) {
-        const sessions = load<Record<string, string>>("xepher.sessions", {});
-        await desktop!.runLocal(
-          { repo: project.full_name, cloneUrl: project.clone_url, prompt: text, sessionId: sessions[project.full_name], fullAccess: settings.fullAccess },
-          (e) => {
-            // errors reject the runLocal promise instead
-            if (e.type === "status") setStatus(e.text);
-            else if (e.type === "reply") {
-              reply = e.text;
-              if (e.sessionId) save("xepher.sessions", { ...sessions, [project.full_name]: e.sessionId });
-            }
-          },
-        );
-      } else {
-        if (!settings.runner) throw new Error("Set the cloud runner repo in settings.");
-        reply = await gh.runCloud(settings.runner, project, text, setStatus);
-      }
-      add("xepher", reply || "Done.");
-      // Talk for about as long as reading the reply takes.
-      robot.activity = MODE_TALK;
-      if (settings.speakReplies) speak(reply || "Done");
-      setTimeout(() => {
-        if (robot.activity === MODE_TALK) robot.activity = null;
-        flash(MODE_HAPPY, 1.5);
-      }, Math.min(12000, 2500 + reply.length * 40));
-    } catch (e: any) {
-      robot.activity = null;
-      flash(MODE_NOPE, 1.8);
-      add("error", e.message ?? String(e));
-    } finally {
-      setBusy(false);
-      setStatus("");
-      if (robot.activity === MODE_THINK) robot.activity = null;
-    }
-  }
-
-  async function startVoice() {
-    if (listening) return;
-    if (platform === "desktop") {
-      // Windows voice typing writes into the focused box; we send once it goes quiet.
-      inputRef.current?.focus();
-      voiceArmed.current = true;
-      robot.activity = MODE_SURPRISED;
-      setListening(true);
-      desktop!.dictate();
-      return;
-    }
-    setListening(true);
-    robot.activity = MODE_SURPRISED;
-    try {
-      const heard = await listen(setInput);
-      robot.activity = null;
-      setListening(false);
-      if (heard) run(heard);
-    } catch (e: any) {
-      robot.activity = null;
-      setListening(false);
-      add("error", `Voice: ${e.message}`);
-    }
-  }
-
-  // Desktop voice: once the dictated text stops changing for 2 s, send it.
-  useEffect(() => {
-    if (!voiceArmed.current || !input.trim()) return;
-    const t = setTimeout(() => {
-      voiceArmed.current = false;
-      setListening(false);
-      robot.activity = null;
-      run(input);
-    }, 2000);
-    return () => clearTimeout(t);
-  }, [input]);
 
   // --- dragging the bubble (desktop; Android moves its window natively) ---
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -302,7 +121,7 @@ export default function App() {
       <Suspense fallback={null}>
         <Scene />
       </Suspense>
-      {!expanded && (busy || listening || update?.install) && <div className="dot" />}
+      {!expanded && update?.install && <div className="dot" />}
     </div>
   );
 
@@ -311,125 +130,57 @@ export default function App() {
     <div className={expanded ? "panel" : "bubble"}>
       <header>
         {bubble}
-        {expanded && (<>
-        <div className="head-text">
-          <b className="glitch" data-text="XEPHER//ROOT">XEPHER//ROOT</b>
-          <span className="status">[*] {listening ? "LISTENING ON MIC CHANNEL…" : status || (busy ? "Working…" : project ? `TARGET: ${project.name}` : "NO TARGET")}</span>
-          <span className="where">{runsLocally ? "NODE: LOCAL // this laptop" : "NODE: UPLINK // cloud"}</span>
-        </div>
-        <div className="head-buttons">
-          <button title="Projects" aria-label="Projects" onClick={() => setView(view === "projects" ? "chat" : "projects")}>TGT</button>
-          <button title="Settings" aria-label="Settings" onClick={() => setView(view === "settings" ? "chat" : "settings")}>CFG</button>
-          <button title="Minimise" aria-label="Minimise" onClick={() => expand(false)}>×</button>
-        </div>
-        </>)}
+        {expanded && (
+          <>
+            <div className="head-text">
+              <b className="glitch" data-text="XEPHER//ROOT">XEPHER//ROOT</b>
+              <span className="where">intrusion suite v6.6.6</span>
+            </div>
+            <div className="head-buttons">
+              <button title="Settings" aria-label="Settings" onClick={() => setCfg(!cfg)}>CFG</button>
+              <button title="Minimise" aria-label="Minimise" onClick={() => expand(false)}>×</button>
+            </div>
+          </>
+        )}
       </header>
       {expanded && (
-      <>
-      <MatrixRain />
-      <div className="crt" aria-hidden />
-      {breach && <Breach onDone={() => setBreach(false)} />}
-      <Readout />
-
-      {update && (
-        <div className="update">
-          <span>{update.text}</span>
-          {update.install && <button className="primary" onClick={update.install}>{platform === "desktop" ? "Restart to update" : "Update"}</button>}
-          <button aria-label="Dismiss" onClick={() => setUpdate(null)}>✕</button>
-        </div>
-      )}
-
-      {view === "chat" && (
-        <div className="log" ref={logRef}>
-          {log.length === 0 && (
-            <p className="hint">
-              &gt; SYSTEM READY. Try: “create project weather app”, “open kastay”, “add a contact form”, or tap the mic.
-            </p>
-          )}
-          {log.map((l, i) => (
-            <div key={i} className={`line ${l.who}`}>
-              {l.who === "you" && <span className="prompt">root@{l.project ?? "xepher"}:~$ </span>}
-              {l.who === "error" && "[!] ACCESS DENIED: "}
-              {l.who === "xepher" && i === log.length - 1 ? <Typed text={l.text} /> : l.text}
-            </div>
-          ))}
-          {busy && (
-            <div className="line xepher typing">
-              [*] {status || "…"}
-              <HackLog project={project?.name ?? "target"} />
+        <>
+          <MatrixRain />
+          <div className="crt" aria-hidden />
+          {update && (
+            <div className="update">
+              <span>{update.text}</span>
+              {update.install && <button className="primary" onClick={update.install}>{platform === "desktop" ? "Restart to update" : "Update"}</button>}
+              <button aria-label="Dismiss" onClick={() => setUpdate(null)}>✕</button>
             </div>
           )}
-        </div>
-      )}
-
-      {view === "projects" && (
-        <div className="list">
-          {projects.length === 0 && <p className="hint">No projects yet. Say “create project my app”.</p>}
-          {projects.map((p) => (
-            <div key={p.full_name} className={`project ${p.full_name === current ? "on" : ""}`}>
-              <button className="name" onClick={() => (setCurrent(p.full_name), setView("chat"), say(p.name))}>
-                {p.name}
-              </button>
-              {p.homepage && <button onClick={() => openLink(p.homepage!)}>CLAUDE ↗</button>}
-              <button onClick={() => openLink(p.html_url)}>GITHUB ↗</button>
-            </div>
-          ))}
-          <button className="wide" onClick={refresh}>[ RESCAN TARGETS ]</button>
-        </div>
-      )}
-
-      {view === "settings" && (
-        <div className="list settings">
-          <label>
-            GitHub token (classic, scopes: repo, workflow)
-            <input type="password" value={settings.token} onChange={(e) => setSettings({ ...settings, token: e.target.value })} placeholder="ghp_…" />
-          </label>
-          <label>
-            Cloud runner repo
-            <input value={settings.runner} onChange={(e) => setSettings({ ...settings, runner: e.target.value })} placeholder="axdhii/xepher" />
-          </label>
-          {platform === "desktop" && (
-            <>
-              <label className="row">
-                <input type="checkbox" checked={settings.mode === "local"} onChange={(e) => setSettings({ ...settings, mode: e.target.checked ? "local" : "cloud" })} />
-                Run commands on this laptop {hasClaude ? "" : "(Claude Code not found, using cloud)"}
+          {cfg ? (
+            <div className="list settings">
+              <label>
+                GitHub token (for updates; classic, scope: repo)
+                <input type="password" value={settings.token} onChange={(e) => setSettings({ ...settings, token: e.target.value })} placeholder="ghp_…" />
+              </label>
+              <label>
+                Update from repo
+                <input value={settings.runner} onChange={(e) => setSettings({ ...settings, runner: e.target.value })} placeholder="axdhii/xepher" />
               </label>
               <label className="row">
-                <input type="checkbox" checked={settings.fullAccess} onChange={(e) => setSettings({ ...settings, fullAccess: e.target.checked })} />
-                Let Claude run terminal commands here without asking
+                <input type="checkbox" checked={settings.sound} onChange={(e) => setSettings({ ...settings, sound: e.target.checked })} />
+                Beeps and alarms
               </label>
-              <button className="wide" onClick={() => desktop!.installHooks().then(() => setHooks(true))} disabled={hooks}>
-                {hooks ? "Showing my terminal Claude sessions ✓" : "Show my terminal Claude sessions too"}
-              </button>
-            </>
+              <label className="row">
+                <input type="checkbox" checked={settings.voice} onChange={(e) => setSettings({ ...settings, voice: e.target.checked })} />
+                Robot voice ("access granted")
+              </label>
+              <button className="wide" onClick={() => setCfg(false)}>[ SAVE CONFIG ]</button>
+            </div>
+          ) : (
+            <Suspense fallback={null}>
+              <Console voice={settings.voice} sound={settings.sound} speak={speak} />
+            </Suspense>
           )}
-          <label className="row">
-            <input type="checkbox" checked={settings.speakReplies} onChange={(e) => setSettings({ ...settings, speakReplies: e.target.checked })} />
-            Speak replies out loud
-          </label>
-          <button className="wide" onClick={() => (refresh(), setView("chat"))}>[ SAVE CONFIG ]</button>
-        </div>
-      )}
-
-      <form
-        className="input"
-        onSubmit={(e) => {
-          e.preventDefault();
-          voiceArmed.current = false;
-          setListening(false);
-          run(input);
-        }}
-      >
-        <span className="prompt">$</span>
-        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "listening…" : busy ? "executing…" : "enter command_"} />
-        <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={startVoice} title="Speak" aria-label="Speak">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" />
-          </svg>
-        </button>
-        <button type="submit" disabled={busy || !input.trim()} aria-label="Send">➤</button>
-      </form>
-      </>
+          {breach && <Breach onDone={() => setBreach(false)} />}
+        </>
       )}
     </div>
   );
