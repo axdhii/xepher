@@ -35,7 +35,8 @@ export default function App() {
   // to install (Android always shows its own "Update this app?" confirmation).
   useEffect(() => {
     const token = settings.token.trim() || BUILT_IN_TOKEN;
-    if (!token || !settings.runner) return;
+    if (!token) return setUpdate({ text: "No update token in this build, so updates can't be checked" });
+    if (!settings.runner) return;
     gh.setToken(token);
     const check = async () => {
       if (desktop) return desktop.checkUpdates(settings.runner, token);
@@ -50,12 +51,14 @@ export default function App() {
               android!.installUpdate(r.apkUrl!, token);
             },
           });
-      } catch {} // offline or no release yet: try again next time
+      } catch (e) {
+        setUpdate({ text: `Update check failed: ${(e as Error).message}` }); // retried on next open
+      }
     };
     check();
     const id = setInterval(check, 6 * 3600_000);
     return () => clearInterval(id);
-  }, [settings.token, settings.runner]);
+  }, [settings.token, settings.runner, expanded]); // also re-check each time the panel opens or closes
   useEffect(() => {
     desktop?.onUpdateReady((v) => setUpdate({ text: `Xepher ${v} is ready`, install: () => desktop!.installUpdate() }));
     window.__xepherUpdate = (text) => setUpdate({ text });
