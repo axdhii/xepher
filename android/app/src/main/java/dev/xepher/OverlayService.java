@@ -110,6 +110,7 @@ public class OverlayService extends Service {
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
+        params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
         DisplayMetrics m = getResources().getDisplayMetrics();
         params.x = bubbleX = m.widthPixels - dp(120);
         params.y = bubbleY = m.heightPixels / 2;
@@ -163,11 +164,11 @@ public class OverlayService extends Service {
         if (on) {
             bubbleX = params.x;
             bubbleY = params.y;
-            params.width = Math.min(m.widthPixels - dp(16), dp(440));
-            // Upper part of the screen, so the keyboard doesn't cover the input box.
-            params.height = Math.round(m.heightPixels * 0.55f);
-            params.x = (m.widthPixels - params.width) / 2;
-            params.y = dp(40);
+            // Full screen hacker console; the window shrinks above the keyboard (softInputMode below).
+            params.width = WindowManager.LayoutParams.MATCH_PARENT;
+            params.height = WindowManager.LayoutParams.MATCH_PARENT;
+            params.x = 0;
+            params.y = 0;
             params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
         } else {
             params.width = dp(110);
