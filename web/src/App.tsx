@@ -3,6 +3,7 @@ import { robot, flash, say, poke, MODE_THINK, MODE_TALK, MODE_HAPPY, MODE_NOPE, 
 import { parse, slug, findProject } from "./commands";
 import * as gh from "./github";
 import { desktop, android, platform, setExpanded, openLink, speak, listen } from "./bridge";
+import { MatrixRain, Breach, Typed, HackLog, Readout } from "./Hacker";
 
 const Scene = lazy(() => import("./robot/Scene"));
 
@@ -27,6 +28,7 @@ export default function App() {
   const [current, setCurrent] = useState<string>(() => localStorage.getItem("xepher.current") ?? "");
   const [log, setLog] = useState<Line[]>(() => load<{ lines: Line[] }>("xepher.log", { lines: [] }).lines);
   const [expanded, setExpandedState] = useState(false);
+  const [breach, setBreach] = useState(false);
   const [view, setView] = useState<"chat" | "projects" | "settings">(settings.token ? "chat" : "settings");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -133,6 +135,7 @@ export default function App() {
 
   function expand(on: boolean) {
     setExpandedState(on);
+    setBreach(on);
     setExpanded(on);
     poke();
   }
@@ -183,7 +186,7 @@ export default function App() {
       if (!project) return add("xepher", "Pick or create a project first.");
       setBusy(true);
       robot.activity = MODE_THINK;
-      say("ON IT", 1.2);
+      say("HACKING", 1.4);
       setStatus("Starting…");
       let reply = "";
       if (runsLocally) {
@@ -310,19 +313,23 @@ export default function App() {
         {bubble}
         {expanded && (<>
         <div className="head-text">
-          <b>Xepher</b>
-          <span className="status">{listening ? "Listening…" : status || (busy ? "Working…" : project ? project.name : "No project")}</span>
-          <span className="where">{runsLocally ? "Runs on this laptop" : "Runs in the cloud"}</span>
+          <b className="glitch" data-text="XEPHER//ROOT">XEPHER//ROOT</b>
+          <span className="status">[*] {listening ? "LISTENING ON MIC CHANNEL…" : status || (busy ? "Working…" : project ? `TARGET: ${project.name}` : "NO TARGET")}</span>
+          <span className="where">{runsLocally ? "NODE: LOCAL // this laptop" : "NODE: UPLINK // cloud"}</span>
         </div>
         <div className="head-buttons">
-          <button title="Projects" onClick={() => setView(view === "projects" ? "chat" : "projects")}>☰</button>
-          <button title="Settings" onClick={() => setView(view === "settings" ? "chat" : "settings")}>⚙</button>
-          <button title="Minimise" onClick={() => expand(false)}>–</button>
+          <button title="Projects" aria-label="Projects" onClick={() => setView(view === "projects" ? "chat" : "projects")}>TGT</button>
+          <button title="Settings" aria-label="Settings" onClick={() => setView(view === "settings" ? "chat" : "settings")}>CFG</button>
+          <button title="Minimise" aria-label="Minimise" onClick={() => expand(false)}>×</button>
         </div>
         </>)}
       </header>
       {expanded && (
       <>
+      <MatrixRain />
+      <div className="crt" aria-hidden />
+      {breach && <Breach onDone={() => setBreach(false)} />}
+      <Readout />
 
       {update && (
         <div className="update">
@@ -336,16 +343,22 @@ export default function App() {
         <div className="log" ref={logRef}>
           {log.length === 0 && (
             <p className="hint">
-              Try: “create project weather app”, “open kastay”, “add a contact form”, or tap the mic.
+              &gt; SYSTEM READY. Try: “create project weather app”, “open kastay”, “add a contact form”, or tap the mic.
             </p>
           )}
           {log.map((l, i) => (
             <div key={i} className={`line ${l.who}`}>
-              {l.project && l.who === "you" && <small>{l.project}</small>}
-              {l.text}
+              {l.who === "you" && <span className="prompt">root@{l.project ?? "xepher"}:~$ </span>}
+              {l.who === "error" && "[!] ACCESS DENIED: "}
+              {l.who === "xepher" && i === log.length - 1 ? <Typed text={l.text} /> : l.text}
             </div>
           ))}
-          {busy && <div className="line xepher typing">{status || "…"}</div>}
+          {busy && (
+            <div className="line xepher typing">
+              [*] {status || "…"}
+              <HackLog project={project?.name ?? "target"} />
+            </div>
+          )}
         </div>
       )}
 
@@ -357,11 +370,11 @@ export default function App() {
               <button className="name" onClick={() => (setCurrent(p.full_name), setView("chat"), say(p.name))}>
                 {p.name}
               </button>
-              {p.homepage && <button onClick={() => openLink(p.homepage!)}>Claude ↗</button>}
-              <button onClick={() => openLink(p.html_url)}>GitHub ↗</button>
+              {p.homepage && <button onClick={() => openLink(p.homepage!)}>CLAUDE ↗</button>}
+              <button onClick={() => openLink(p.html_url)}>GITHUB ↗</button>
             </div>
           ))}
-          <button className="wide" onClick={refresh}>Refresh</button>
+          <button className="wide" onClick={refresh}>[ RESCAN TARGETS ]</button>
         </div>
       )}
 
@@ -394,7 +407,7 @@ export default function App() {
             <input type="checkbox" checked={settings.speakReplies} onChange={(e) => setSettings({ ...settings, speakReplies: e.target.checked })} />
             Speak replies out loud
           </label>
-          <button className="wide" onClick={() => (refresh(), setView("chat"))}>Save</button>
+          <button className="wide" onClick={() => (refresh(), setView("chat"))}>[ SAVE CONFIG ]</button>
         </div>
       )}
 
@@ -407,7 +420,8 @@ export default function App() {
           run(input);
         }}
       >
-        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : busy ? "Working…" : "Tell Xepher…"} />
+        <span className="prompt">$</span>
+        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "listening…" : busy ? "executing…" : "enter command_"} />
         <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={startVoice} title="Speak" aria-label="Speak">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z" />
