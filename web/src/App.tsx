@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { robot, poke } from "./robot/state";
 import * as gh from "./github";
-import { desktop, android, platform, setExpanded, speak } from "./bridge";
-import { MatrixRain, Breach } from "./Hacker";
+import { desktop, android, platform, setExpanded } from "./bridge";
+import { Breach } from "./Hacker";
 
 const Scene = lazy(() => import("./robot/Scene"));
 const Console = lazy(() => import("./hack/Console"));
@@ -10,7 +10,7 @@ const Console = lazy(() => import("./hack/Console"));
 // The GitHub token is only for updates: the repo is private. Builds from CI carry
 // one, so nothing needs pasting; CFG can override it.
 const BUILT_IN_TOKEN = import.meta.env.VITE_XEPHER_TOKEN ?? "";
-type Settings = { token: string; runner: string; voice: boolean; sound: boolean };
+type Settings = { token: string; runner: string };
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -23,7 +23,7 @@ function load<T>(key: string, fallback: T): T {
 const save = (key: string, value: unknown) => localStorage.setItem(key, JSON.stringify(value));
 
 export default function App() {
-  const [settings, setSettings] = useState<Settings>(() => load("xepher.settings", { token: "", runner: "axdhii/xepher", voice: true, sound: true }));
+  const [settings, setSettings] = useState<Settings>(() => load("xepher.settings", { token: "", runner: "axdhii/xepher" }));
   const [expanded, setExpandedState] = useState(false);
   const [breach, setBreach] = useState(false);
   const [cfg, setCfg] = useState(false);
@@ -136,8 +136,8 @@ export default function App() {
         {expanded && (
           <>
             <div className="head-text">
-              <b className="glitch" data-text="XEPHER//ROOT">XEPHER//ROOT</b>
-              <span className="where">intrusion suite v6.6.6</span>
+              <b>XEPHER</b>
+              <span className="where">helix-ops console</span>
             </div>
             <div className="head-buttons">
               <button title="Settings" aria-label="Settings" onClick={() => setCfg(!cfg)}>CFG</button>
@@ -148,8 +148,6 @@ export default function App() {
       </header>
       {expanded && (
         <>
-          <MatrixRain />
-          <div className="crt" aria-hidden />
           {update && (
             <div className="update">
               <span>{update.text}</span>
@@ -167,19 +165,11 @@ export default function App() {
                 Update from repo
                 <input value={settings.runner} onChange={(e) => setSettings({ ...settings, runner: e.target.value })} placeholder="axdhii/xepher" />
               </label>
-              <label className="row">
-                <input type="checkbox" checked={settings.sound} onChange={(e) => setSettings({ ...settings, sound: e.target.checked })} />
-                Beeps and alarms
-              </label>
-              <label className="row">
-                <input type="checkbox" checked={settings.voice} onChange={(e) => setSettings({ ...settings, voice: e.target.checked })} />
-                Robot voice ("access granted")
-              </label>
               <button className="wide" onClick={() => setCfg(false)}>[ SAVE CONFIG ]</button>
             </div>
           ) : (
             <Suspense fallback={null}>
-              <Console voice={settings.voice} sound={settings.sound} speak={speak} />
+              <Console />
             </Suspense>
           )}
           {breach && <Breach onDone={() => setBreach(false)} />}

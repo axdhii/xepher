@@ -13,7 +13,6 @@ type Desktop = {
 
 type AndroidNative = {
   setExpanded(expanded: boolean): void;
-  speak(text: string): void;
   version(): number; // versionCode, which is the build number in the release tag
   installUpdate(assetApiUrl: string, token: string): void; // answers through window.__xepherUpdate
 };
@@ -37,9 +36,3 @@ export function setExpanded(expanded: boolean) {
   android?.setExpanded(expanded);
 }
 
-export function speak(text: string) {
-  const short = text.replace(/[`*#_>]/g, "").slice(0, 400);
-  if (android) return android.speak(short);
-  speechSynthesis.cancel();
-  speechSynthesis.speak(new SpeechSynthesisUtterance(short));
-}

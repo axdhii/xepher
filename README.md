@@ -7,18 +7,20 @@ A floating robot (the one from aadhil-portfolio) that sits on your screen on Win
 
 ## The console
 
-Opening it plays a breach sequence, then shows a terminal, a network map (your proxies, the target, and a red trace creeping back towards you), the target's vault (scrambles when encrypted, resolves when decrypted), a memory hex dump, the target's IDS log reacting to what you do, and a traffic graph.
+A dark ops console for a simulated engagement against "Helix Dynamics", an invented company. Every tool, host, finding and record is made up.
 
-15 buttons run fake attacks with realistic output: CONNECT, DISCONNECT, SCAN (nmap), BRUTEFORCE (hydra), BYPASS (firewall), ESCALATE (root), INJECT (sqlmap), ENCRYPT and DECRYPT (openssl, hashcat), EXFILTRATE, TRACEROUTE, PROXY CHAIN, WIPE LOGS, BOTNET and SELF-DESTRUCT. You can also type them (`help` lists the commands). Some need a live connection first. Stay connected too long, or make too much noise, and the trace reaches you and drops the link; proxies slow it and wiping logs rolls it back.
+- **Screens** (tabs): OPS (network topology, the defenders' alert feed, egress graph), RECON (host table, tap to target), PCAP (live packet capture), CRACK (GPU status board and recovered records), SESSIONS (open sessions and pulled files), CRYPTO (vault, key material, memory).
+- **20 actions** in five groups: RECON (sweep, probe, audit, DNS map), ACCESS (breach, spray, tunnel), POST (elevate, harvest, pivot, exfil, anchor), CRYPTO (crack, encrypt, decrypt, keygen), OPSEC (relay+, scrub, drop, killswitch). They chain: probe and audit a host before breaching it, elevate before harvesting, pivot to reach deeper zones. You can also type them (`help`, `target <host>`, `clear`).
+- **Detection** rises while sessions are open. At 100% the defenders cut every session. Relays slow it and scrubbing rolls it back.
 
-CFG has beeps, the robot voice ("access granted"), and the GitHub token used for updates.
+CFG holds an optional GitHub token for updates; release builds already include one.
 
 ## One-time setup
 
 1. **Install the apps** from this repo's Releases page:
    - Windows: run `Xepher-Setup-*.exe`. Windows SmartScreen will warn because the app isn't code-signed: click **More info → Run anyway**.
    - Android: download `Xepher.apk` on the phone and open it. Allow "install unknown apps" for your browser when asked. Open Xepher and allow **display over other apps**.
-2. For updates: github.com → Settings → Developer settings → Personal access tokens → **Tokens (classic)**, tick `repo`, and paste it into Xepher's CFG.
+2. Updates work out of the box: release builds carry a read token from the `XEPHER_UPDATE_TOKEN` (or `XEPHER_GH_TOKEN`) repo secret.
 
 ## Updates
 
