@@ -16,6 +16,18 @@ export const SCREENS: { id: ScreenId; label: string; view: (p: Props) => React.R
   { id: "facility", label: "FACILITY", view: Facility },
 ];
 
+// One line per screen for the helpbook.
+export const SCREEN_HELP: Record<ScreenId, string> = {
+  ops: "The big picture: a map of the hosts you can reach, the security team's live alert feed, and how much data is leaving on the tunnel.",
+  recon: "Every host you know and its details. Tap a row to make it your target; most actions act on the target.",
+  intel: "People and inboxes. The staff directory (OSINT) and mailboxes (MAIL) feed PHISH, BADGE and the story; wireless networks come from WIFI.",
+  pcap: "A live packet capture, like Wireshark. It gets busy while an action runs. Pure show, nothing to do here.",
+  crack: "The password-cracking rig. Records you HARVEST land here; CRACK recovers them and the GPU meters light up.",
+  sessions: "The machines you control and the files you have pulled out. Tap a session to target that host.",
+  crypto: "A vault you can seal and open, its key material, and a live memory dump. ENCRYPT / DECRYPT flip it.",
+  facility: "The building itself: six camera feeds you can loop, the doors you can open with a cloned badge, lighting, and the rooftop uplink.",
+};
+
 // Repaints a canvas on an interval with the latest props.
 function useCanvas<T>(data: T, ms: number, draw: (ctx: CanvasRenderingContext2D, w: number, h: number, d: T, t: number) => void) {
   const ref = useRef<HTMLCanvasElement>(null);
