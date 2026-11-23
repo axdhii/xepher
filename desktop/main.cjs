@@ -61,12 +61,18 @@ ipcMain.on("move-by", (_e, dx, dy) => {
 // renderer hands over the GitHub token from its settings.
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.on("update-downloaded", (info) => win?.webContents.send("update-ready", info.version));
-autoUpdater.on("error", (e) => console.error("update:", e.message));
+// Show progress and errors in the panel, the same way Android does, so a slow
+// download or a failed check doesn't look like "no update".
+const updateStatus = (text) =>
+  win?.webContents.executeJavaScript(`window.__xepherUpdate && window.__xepherUpdate(${JSON.stringify(text)})`).catch(() => {});
+autoUpdater.on("update-available", (info) => updateStatus(`Downloading Xepher ${info.version}…`));
+autoUpdater.on("download-progress", (p) => updateStatus(`Downloading the update… ${Math.round(p.percent)}%`));
+autoUpdater.on("error", (e) => updateStatus(`Update check failed: ${e.message}`));
 ipcMain.on("check-updates", (_e, repo, token) => {
   if (!app.isPackaged || !/^[\w.-]+\/[\w.-]+$/.test(repo) || !token) return;
   const [owner, name] = repo.split("/");
   autoUpdater.setFeedURL({ provider: "github", owner, repo: name, private: true, token });
-  autoUpdater.checkForUpdates().catch((e) => console.error("update:", e.message));
+  autoUpdater.checkForUpdates().catch(() => {}); // reported by the "error" event
 });
 ipcMain.on("install-update", () => autoUpdater.quitAndInstall(true, true));
 
