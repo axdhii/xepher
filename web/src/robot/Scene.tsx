@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
+import { BlendFunction, Effect } from "postprocessing";
 import { Robot } from "./Robot";
 import { robot } from "./state";
 
@@ -26,6 +27,22 @@ function Ticker() {
   return null;
 }
 
+// Bloom leaves glow colour on fully transparent pixels. The window compositor
+// (Windows and Android) adds those on top of the desktop, so the whole window
+// shows as a faint lit square. Give the glow real alpha and fade it to nothing
+// before the window edge, so only a round halo is left.
+const GLOW_ALPHA = `
+void mainImage(const in vec4 c, const in vec2 uv, out vec4 outputColor) {
+  float fade = smoothstep(0.5, 0.3, distance(uv, vec2(0.5)));
+  vec3 rgb = mix(c.rgb * fade, c.rgb, c.a);
+  outputColor = vec4(rgb, max(c.a, min(1.0, max(rgb.r, max(rgb.g, rgb.b)))));
+}`;
+
+function GlowAlpha() {
+  const effect = useMemo(() => new Effect("GlowAlpha", GLOW_ALPHA, { blendFunction: BlendFunction.SET }), []);
+  return <primitive object={effect} />;
+}
+
 export default function Scene() {
   return (
     <Canvas
@@ -48,6 +65,7 @@ export default function Scene() {
       <Robot />
       <EffectComposer multisampling={2}>
         <Bloom mipmapBlur luminanceThreshold={1} luminanceSmoothing={0.2} intensity={0.85} radius={0.7} />
+        <GlowAlpha />
       </EffectComposer>
     </Canvas>
   );
