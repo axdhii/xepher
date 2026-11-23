@@ -710,6 +710,7 @@ export const HELP = [
   "commands (or use the buttons):",
   ...ACTIONS.map((a) => `  ${a.words[0].padEnd(11)} ${a.help}`),
   "  target <ip|name>  select a host",
+  "  guide      open the full helpbook",
   "  clear      clear the screen",
 ];
 

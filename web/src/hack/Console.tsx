@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ACTIONS, GROUPS, HELP, caught, clock, exposure, find, initial, next, selected, type Action, type Cls, type Group, type Step, type Sys } from "./scripts";
 import { robot, MODE_THINK } from "../robot/state";
-import { SCREENS, type ScreenId } from "./screens";
+import { SCREENS, SCREEN_HELP, type ScreenId } from "./screens";
 
 type Line = { t: string; c: Cls };
 export type Alert = { t: string; sev: "low" | "med" | "high" };
@@ -21,6 +21,7 @@ export default function Console() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [screen, setScreen] = useState<ScreenId>("ops");
   const [group, setGroup] = useState<Group>("RECON");
+  const [guide, setGuide] = useState(false);
   const [cmd, setCmd] = useState("");
   const runId = useRef(0);
   const termRef = useRef<HTMLDivElement>(null);
@@ -73,6 +74,7 @@ export default function Console() {
     const [w, arg] = t.toLowerCase().split(/\s+/);
     print(`${prompt(sysRef.current)} ${t}`, "cmd");
     if (w === "clear") return setLines([]);
+    if (w === "guide" || w === "?") return setGuide(true);
     if (w === "help") return print(HELP.join("\n"), "dim");
     if (w === "target") {
       const h = sysRef.current.hosts.find((x) => x.ip === arg || x.name.toLowerCase().startsWith(arg ?? "-"));
@@ -114,7 +116,8 @@ export default function Console() {
   const hintGroup = ACTIONS.find((a) => a.id === hint.id)?.group;
   return (
     <div className={`hack ${sys.detection > 80 ? "hot" : ""}`}>
-      <Status sys={sys} />
+      {guide && <Guide sys={sys} close={() => setGuide(false)} />}
+      <Status sys={sys} onGuide={() => setGuide(true)} />
       <nav className="tabs" role="tablist">
         {SCREENS.map((x, i) => (
           <button key={x.id} role="tab" aria-selected={screen === x.id} className={screen === x.id ? "on" : ""} onClick={() => setScreen(x.id)}>
@@ -181,7 +184,7 @@ const background = (s: Sys) =>
     ? [`analyst escalated case HX-IR-${Math.floor(Math.random() * 9000) + 1000}`, "beaconing pattern matched on egress", `account lockout: ${["a.reyes", "svc_backup", "j.okafor"][Math.floor(Math.random() * 3)]}`, "threat hunt query started on all endpoints"][Math.floor(Math.random() * 4)]
     : ["scheduled vuln scan finished", "certificate renewal ok on portal", "backup job 2231 completed", "dns resolver latency normal", "patch window approved for Sunday"][Math.floor(Math.random() * 5)];
 
-function Status({ sys }: { sys: Sys }) {
+function Status({ sys, onGuide }: { sys: Sys; onGuide: () => void }) {
   const [t, setT] = useState(clock());
   useEffect(() => {
     const id = setInterval(() => setT(clock()), 1000);
@@ -198,6 +201,53 @@ function Status({ sys }: { sys: Sys }) {
         detect <u><i style={{ width: `${det}%` }} className={det > 70 ? "hot" : det > 35 ? "warm" : ""} /></u> {det}%
       </span>
       <span className="dim clock">{t}</span>
+      <button className="guide-btn" onClick={onGuide} title="How to use Xepher">? GUIDE</button>
+    </div>
+  );
+}
+
+// The in-app helpbook: what each screen is, how to advance, and every action.
+function Guide({ sys, close }: { sys: Sys; close: () => void }) {
+  const hint = next(sys);
+  const arc = ["SWEEP — find hosts", "PROBE — list their services", "AUDIT — find a weakness", "BREACH — open a session", "ELEVATE — get admin", "HARVEST — grab password records", "CRACK — recover them", "PIVOT — reach the next zone", "repeat deeper, then UPLINK in the CORE"];
+  return (
+    <div className="guide" onClick={close}>
+      <div className="guide-card" onClick={(e) => e.stopPropagation()}>
+        <h2>XEPHER — how to use it <button onClick={close}>close</button></h2>
+        <p className="lead">This is a role-play ops console. Nothing here is real: the company, hosts, tools and data are all invented. Play it like a game.</p>
+
+        <h4>Getting started</h4>
+        <ol>
+          <li>Pick an action from the <b>pad</b> at the bottom: choose a group (RECON, ACCESS, …), then tap a button. You can also type its name in the terminal, e.g. <code>probe</code>.</li>
+          <li>Most actions work on the <b>target</b> host. Switch target by tapping a row on the RECON or SESSIONS screen, or type <code>target web01</code>.</li>
+          <li>Not sure what to do? The <b>next</b> bar above the pad always suggests the next move — tap it to run it.</li>
+        </ol>
+
+        <h4>How to advance</h4>
+        <p>The run follows this arc. Each step unlocks the next:</p>
+        <ol className="arc">{arc.map((x) => <li key={x}>{x}</li>)}</ol>
+        <p className="dim">Right now: <b className="ok">{hint.id ? find(hint.id)!.label : "—"}</b> — {hint.why}</p>
+
+        <h4>Staying hidden</h4>
+        <p>The <b>detection</b> bar fills while you hold sessions. At 100% the defenders cut you off. <b>RELAY+</b> slows it, <b>SCRUB</b> and <b>SPOOF</b> and <b>DECOY</b> lower it, <b>KILLSWITCH</b> resets the whole run.</p>
+
+        <h4>The screens (F1–F8)</h4>
+        <dl>
+          {SCREENS.map((x, i) => (
+            <div key={x.id}><dt>F{i + 1} {x.label}</dt><dd>{SCREEN_HELP[x.id]}</dd></div>
+          ))}
+        </dl>
+
+        <h4>Every action</h4>
+        {GROUPS.map((g) => (
+          <div key={g} className="g">
+            <dt className="gh">{g}</dt>
+            {ACTIONS.filter((a) => a.group === g).map((a) => (
+              <div key={a.id} className="a"><b>{a.label}</b><span>{a.help}</span></div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

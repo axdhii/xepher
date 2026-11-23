@@ -62,6 +62,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .statusbar { grid-area: status; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 18px; font-size: 10.5px; padding: 4px 8px; border: 1px solid var(--line); background: var(--bg2); color: var(--g-dim); letter-spacing: 0.04em; }
 .statusbar b { color: var(--text); font-weight: 500; }
 .statusbar .clock { margin-left: auto; }
+.statusbar .guide-btn { padding: 2px 9px; border: 1px solid var(--g-dim); border-radius: 3px; background: transparent; color: var(--g); font: inherit; font-size: 10px; letter-spacing: 0.08em; }
+.statusbar .guide-btn:hover { background: #0f1714; }
+
+/* helpbook overlay */
+.guide { position: absolute; inset: 0; z-index: 20; background: rgba(4, 6, 6, 0.8); display: flex; padding: 14px; overflow: auto; }
+.guide-card { margin: auto; width: 100%; max-width: 680px; background: var(--bg2); border: 1px solid var(--g-dim); border-radius: 6px; padding: 16px 20px; line-height: 1.55; }
+.guide-card h2 { margin: 0 0 10px; font-size: 15px; color: var(--g); letter-spacing: 0.1em; display: flex; align-items: center; justify-content: space-between; }
+.guide-card h2 button { padding: 3px 12px; border: 1px solid var(--line); border-radius: 3px; background: transparent; color: var(--text); font-size: 11px; }
+.guide-card h2 button:hover { border-color: var(--g-dim); }
+.guide-card h4 { margin: 16px 0 6px; font-size: 11px; letter-spacing: 0.1em; color: var(--g); text-transform: uppercase; }
+.guide-card p { margin: 6px 0; font-size: 12px; }
+.guide-card .lead { color: var(--text); }
+.guide-card code { background: #0a110d; border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; color: var(--g); }
+.guide-card ol { margin: 6px 0; padding-left: 20px; font-size: 12px; }
+.guide-card ol li { margin: 4px 0; }
+.guide-card ol.arc { columns: 2; column-gap: 24px; }
+.guide-card dl { margin: 6px 0; }
+.guide-card dt { font-size: 11px; color: var(--g); letter-spacing: 0.06em; margin-top: 7px; }
+.guide-card dd { margin: 1px 0 0; font-size: 12px; color: var(--text); }
+.guide-card .g { margin-top: 8px; }
+.guide-card .gh { border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+.guide-card .a { display: flex; gap: 10px; font-size: 12px; padding: 2px 0; }
+.guide-card .a b { flex: none; width: 92px; color: var(--g); font-weight: 600; }
+.guide-card .a span { color: var(--g-dim); }
 .meter { display: inline-flex; align-items: center; gap: 6px; }
 .meter u { display: inline-block; width: 70px; height: 5px; background: #16221b; }
 .meter i { display: block; height: 100%; background: var(--g); transition: width 0.6s; }
@@ -142,6 +166,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   }
   .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .tabs button { padding: 4px 2px; font-size: 10px; border-radius: 3px; }
+  .statusbar .guide-btn { margin-left: 8px; }
+  .guide-card { padding: 14px; }
+  .guide-card ol.arc { columns: 1; }
+  .guide-card .a b { width: 76px; }
   .tabs button .dim { display: none; }
   .grid.ops { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 70px; grid-template-areas: "topo" "feed"; }
   .grid.ops .traffic { display: none; }
