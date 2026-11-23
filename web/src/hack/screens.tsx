@@ -1,17 +1,19 @@
 // The switchable screens. Each reads the simulated world; none of it is real.
 import { useEffect, useRef, useState } from "react";
-import { ip, pick, rnd, selected, zoneName, type Sys } from "./scripts";
+import { DOORS, ip, pick, rnd, selected, zoneName, type Sys } from "./scripts";
 import type { Alert } from "./Console";
 
 type Props = { sys: Sys; alerts: Alert[]; select: (ip: string) => void };
-export type ScreenId = "ops" | "recon" | "pcap" | "crack" | "sessions" | "crypto";
+export type ScreenId = "ops" | "recon" | "intel" | "pcap" | "crack" | "sessions" | "crypto" | "facility";
 export const SCREENS: { id: ScreenId; label: string; view: (p: Props) => React.ReactNode }[] = [
   { id: "ops", label: "OPS", view: Ops },
   { id: "recon", label: "RECON", view: Recon },
+  { id: "intel", label: "INTEL", view: Intel },
   { id: "pcap", label: "PCAP", view: Pcap },
   { id: "crack", label: "CRACK", view: Crack },
   { id: "sessions", label: "SESSIONS", view: Sessions },
   { id: "crypto", label: "CRYPTO", view: Crypto },
+  { id: "facility", label: "FACILITY", view: Facility },
 ];
 
 // Repaints a canvas on an interval with the latest props.
@@ -116,7 +118,7 @@ function Feed({ alerts }: { alerts: Alert[] }) {
     <div className="rows bottom">
       {alerts.slice(-30).map((a, i) => (
         <div key={i} className={a.sev === "high" ? "err" : a.sev === "med" ? "warn" : "dim"}>
-          <span className="sev">{a.sev.toUpperCase().padEnd(4)}</span> {a.t}
+          <span className="sev">{a.sev}</span>{a.t}
         </div>
       ))}
     </div>
@@ -404,6 +406,115 @@ function HexDump({ sealed }: { sealed: boolean }) {
     return () => clearInterval(id);
   }, [sealed]);
   return <pre>{rows.join("\n")}</pre>;
+}
+
+// ---------------- INTEL: people, mail, wireless ----------------
+function Intel({ sys }: Props) {
+  return (
+    <div className="grid intel">
+      <Pane title={`staff directory // ${sys.staff.length}`} className="staff">
+        <table>
+          <thead>
+            <tr><th>name</th><th>role</th><th>mail</th></tr>
+          </thead>
+          <tbody>
+            {sys.staff.length === 0 && <tr><td colSpan={3} className="dim">empty. RECON &gt; OSINT.</td></tr>}
+            {sys.staff.map((p) => (
+              <tr key={p.mail} className={sys.badge === p.name ? "sel" : ""}>
+                <td>{p.name}</td><td className="dim">{p.role}</td><td>{p.mail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Pane>
+      <Pane title={`mail // ${sys.inbox.length}`} className="inbox">
+        <div className="rows">
+          {sys.inbox.length === 0 && <div className="dim">no mailbox open. POST &gt; MAIL in a session.</div>}
+          {sys.inbox.map((m, i) => (
+            <div key={i} className="line"><span className="dim">{m.from.padEnd(12)}</span>{m.subject}</div>
+          ))}
+        </div>
+      </Pane>
+      <Pane title={`wireless // ${sys.wifi.length}`} className="air">
+        <div className="rows">
+          {sys.wifi.length === 0 && <div className="dim">no scan yet. RECON &gt; WIFI.</div>}
+          {sys.wifi.map((n) => (
+            <div key={n.ssid} className="line">
+              <span className="meter"><u><i style={{ width: `${Math.round(((n.sig + 95) / 60) * 100)}%` }} /></u></span> {n.ssid.padEnd(18)} <span className="dim">ch{String(n.ch).padEnd(4)}{n.sec}</span>
+            </div>
+          ))}
+        </div>
+      </Pane>
+    </div>
+  );
+}
+
+// ---------------- FACILITY: cameras, doors, building ----------------
+const CAMS = ["LOBBY", "STAIR C", "SERVER B2", "FLOOR 9", "DOCK", "ROOF"];
+function Facility({ sys }: Props) {
+  return (
+    <div className="grid facility">
+      <Pane title={`cctv // ${sys.cams ? "feeds looped" : "live"}`} className="cams">
+        <Cams sys={sys} />
+      </Pane>
+      <Pane title="building" className="bldg">
+        <div className="rows">
+          <div><span className="dim">badge     </span>{sys.badge ?? <span className="dim">none (ACCESS &gt; BADGE)</span>}</div>
+          <div><span className="dim">lighting  </span><span className={sys.lights ? "" : "warn"}>{sys.lights ? "normal" : "off, floors 2-9"}</span></div>
+          <div><span className="dim">uplink    </span><span className={sys.uplink ? "ok" : "dim"}>{sys.uplink ? "operator: us" : "ground station"}</span></div>
+          <div className="dim">doors</div>
+          {DOORS.map((d) => (
+            <div key={d}>  <span className={sys.doors.includes(d) ? "ok" : "dim"}>{sys.doors.includes(d) ? "open  " : "locked"}</span> {d}</div>
+          ))}
+        </div>
+      </Pane>
+    </div>
+  );
+}
+
+function Cams({ sys }: { sys: Sys }) {
+  const frozen = useRef(Date.now());
+  const ref = useCanvas(sys, 120, (ctx, w, h, s, t) => {
+    if (!s.cams) frozen.current = Date.now();
+    const cols = w > h * 1.6 ? 3 : 2;
+    const rows = Math.ceil(CAMS.length / cols);
+    const cw = w / cols;
+    const ch = h / rows;
+    const stamp = new Date(s.cams ? frozen.current - 240000 + ((t / 1000) % 240) * 1000 : Date.now()).toTimeString().slice(0, 8);
+    CAMS.forEach((name, i) => {
+      const x = (i % cols) * cw + 3;
+      const y = Math.floor(i / cols) * ch + 3;
+      const fw = cw - 6;
+      const fh = ch - 6;
+      const lit = s.lights || i === 5 ? 1 : 0.25;
+      ctx.fillStyle = `rgba(${Math.round(30 * lit)},${Math.round(38 * lit)},${Math.round(34 * lit)},1)`;
+      ctx.fillRect(x, y, fw, fh);
+      // a simple room: floor lines in perspective
+      ctx.strokeStyle = `rgba(160,180,170,${0.25 * lit})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let k = 1; k < 5; k++) {
+        ctx.moveTo(x + fw / 2, y + fh * 0.35);
+        ctx.lineTo(x + (fw * k) / 5, y + fh);
+      }
+      ctx.moveTo(x, y + fh * 0.62);
+      ctx.lineTo(x + fw, y + fh * 0.62);
+      ctx.stroke();
+      // grain
+      for (let k = 0; k < 90; k++) {
+        ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.06})`;
+        ctx.fillRect(x + Math.random() * fw, y + Math.random() * fh, 3, 3);
+      }
+      ctx.font = "18px ui-monospace, monospace";
+      ctx.fillStyle = "rgba(220,230,225,0.8)";
+      ctx.fillText(`CAM-0${i + 1} ${name}`, x + 8, y + 22);
+      ctx.fillText(stamp, x + fw - 98, y + fh - 10);
+      ctx.fillStyle = s.cams ? C.amber : C.red;
+      if (s.cams || Math.floor(t / 700) % 2) ctx.fillRect(x + fw - 16, y + 12, 8, 8);
+      if (s.cams) ctx.fillText("LOOP", x + fw - 62, y + 22);
+    });
+  });
+  return <canvas ref={ref} aria-label="Camera feeds" />;
 }
 
 function Pane({ title, className, children }: { title: string; className: string; children: React.ReactNode }) {

@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACTIONS, GROUPS, find, initial, caught, exposure, type Sys, type Step } from "./hack/scripts.ts";
+import { ACTIONS, GROUPS, find, initial, caught, exposure, next, type Sys, type Step } from "./hack/scripts.ts";
 
 // Runs an action's state changes in order, like the console does.
 const apply = (s: Sys, id: string) => find(id)!.run(s).reduce<Sys>((o, st: Step) => (st.set ? { ...o, ...st.set(o) } : o), s);
 
-test("20 actions across the five groups, each findable", () => {
-  assert.equal(ACTIONS.length, 20);
+test("33 actions across the six groups, each findable", () => {
+  assert.equal(ACTIONS.length, 33);
   for (const g of GROUPS) assert.ok(ACTIONS.some((a) => a.group === g), g);
   for (const a of ACTIONS) for (const w of a.words) assert.equal(find(w), a, w);
   assert.equal(find("rm"), undefined);
@@ -40,4 +40,27 @@ test("relays slow exposure and getting caught drops every session", () => {
   assert.ok(exposure({ ...s, hops: 9 }) < exposure(s));
   const after = caught(s).reduce<Sys>((o, st) => (st.set ? { ...o, ...st.set(o) } : o), s);
   assert.equal(after.sessions.length, 0);
+});
+
+test("following the next hint walks the story to the uplink", () => {
+  let s = initial();
+  for (let i = 0; i < 60 && !s.uplink; i++) {
+    const h = next(s);
+    assert.ok(h.id, h.why);
+    s = { ...apply(s, h.id!), detection: 0 };
+  }
+  assert.ok(s.uplink);
+  assert.equal(s.zones, 3);
+});
+
+test("facility actions are gated: badge before doors, CORP before cams", () => {
+  let s = initial();
+  assert.ok(find("doors")!.run(s).some((x) => x.c === "err"));
+  assert.ok(find("cams")!.run(s).some((x) => x.c === "err"));
+  s = apply(apply(s, "osint"), "badge");
+  assert.ok(s.badge);
+  s = apply(s, "doors");
+  assert.equal(s.doors.length, 1);
+  s = apply({ ...s, zones: 2 }, "cams");
+  assert.ok(s.cams);
 });
