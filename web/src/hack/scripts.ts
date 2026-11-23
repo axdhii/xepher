@@ -19,14 +19,24 @@ export type Sys = {
   keyId: string;
   activity: string | null; // running action, drives the packet capture
   nextId: number;
+  staff: Person[]; // from OSINT
+  inbox: { from: string; subject: string; host: string }[];
+  wifi: { ssid: string; ch: number; sig: number; sec: string }[];
+  badge: string | null; // whose badge we cloned
+  cams: boolean; // camera feeds looped
+  doors: string[]; // unlocked doors
+  lights: boolean;
+  uplink: boolean;
+  cert: string | null; // forged signing cert
 };
+export type Person = { name: string; role: string; mail: string };
 
-export type Cls = "cmd" | "ok" | "err" | "warn" | "dim" | "hi" | "info" | "";
+export type Cls = "cmd" | "ok" | "err" | "warn" | "dim" | "hi" | "info" | "bar" | "";
 // One step: wait, print, animate a progress bar, and/or change the world.
 export type Step = { t?: string; c?: Cls; d?: number; bar?: string; ms?: number; set?: (s: Sys) => Partial<Sys> };
 export type Action = { id: string; label: string; group: Group; words: string[]; help: string; run: (s: Sys) => Step[] };
-export type Group = "RECON" | "ACCESS" | "POST" | "CRYPTO" | "OPSEC";
-export const GROUPS: Group[] = ["RECON", "ACCESS", "POST", "CRYPTO", "OPSEC"];
+export type Group = "RECON" | "ACCESS" | "POST" | "CRYPTO" | "OPSEC" | "FACILITY";
+export const GROUPS: Group[] = ["RECON", "ACCESS", "POST", "CRYPTO", "OPSEC", "FACILITY"];
 
 export const rnd = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));
 export const pick = <T,>(a: ArrayLike<T>): T => a[Math.floor(Math.random() * a.length)];
@@ -50,6 +60,15 @@ const WORLD: Omit<Host, "owned">[] = [
 ];
 const ZONE_NAMES = ["EDGE", "DMZ 10.40.1.0/24", "CORP 10.40.2.0/24", "CORE 10.40.9.0/24"];
 export const zoneName = (z: number) => ZONE_NAMES[z];
+const STAFF: Person[] = [
+  { name: "Ana Reyes", role: "Finance Director", mail: "a.reyes" },
+  { name: "Jide Okafor", role: "IT Operations Lead", mail: "j.okafor" },
+  { name: "Mira Volkova", role: "Head of R&D", mail: "m.volkova" },
+  { name: "Tomas Lindqvist", role: "Facilities Manager", mail: "t.lindqvist" },
+  { name: "Priya Nair", role: "Security Analyst", mail: "p.nair" },
+  { name: "Owen Hart", role: "Executive Assistant", mail: "o.hart" },
+];
+export const DOORS = ["lobby turnstiles", "stairwell C", "server room B2", "exec floor 9", "loading dock"];
 const full = (ipAddr: string) => WORLD.find((h) => h.ip === ipAddr)!;
 
 export const initial = (): Sys => ({
@@ -66,6 +85,15 @@ export const initial = (): Sys => ({
   keyId: hex(16),
   activity: null,
   nextId: 1,
+  staff: [],
+  inbox: [],
+  wifi: [],
+  badge: null,
+  cams: false,
+  doors: [],
+  lights: true,
+  uplink: false,
+  cert: null,
 });
 
 export const selected = (s: Sys) => s.hosts.find((h) => h.ip === s.target) ?? s.hosts[0];
@@ -153,6 +181,43 @@ export const ACTIONS: Action[] = [
       ];
     },
   },
+  {
+    id: "osint",
+    label: "OSINT",
+    group: "RECON",
+    words: ["osint", "people", "staff"],
+    help: "build a staff directory from public sources",
+    run: () => [
+      { t: "$ dossier collect helixdyn.net --sources press,jobs,social", c: "cmd" },
+      { bar: "collecting public profiles", ms: 1400 },
+      ...STAFF.map((p) => ({ t: `  ${p.name.padEnd(16)} ${p.role.padEnd(20)} ${p.mail}@helixdyn.net`, d: 120 })),
+      { t: `${STAFF.length} people indexed. see INTEL`, c: "info", set: () => ({ staff: STAFF }) },
+    ],
+  },
+  {
+    id: "wifi",
+    label: "WIFI",
+    group: "RECON",
+    words: ["wifi", "wireless", "airscan"],
+    help: "list wireless networks around the building",
+    run: () => {
+      const nets = [
+        { ssid: "HELIX-CORP", sec: "WPA3-ENT" },
+        { ssid: "HELIX-GUEST", sec: "open+portal" },
+        { ssid: "HX-LAB-5G", sec: "WPA2-PSK" },
+        { ssid: "FLOOR9-EXEC", sec: "WPA3-SAE" },
+        { ssid: "DIRECT-41-printer", sec: "WPA2-PSK" },
+        { ssid: "(hidden)", sec: "WPA2-ENT" },
+      ].map((n) => ({ ...n, ch: pick([1, 6, 11, 36, 44, 149]), sig: -rnd(38, 86) }));
+      return [
+        { t: "$ airscan --iface wl0 --passive --dwell 250ms", c: "cmd" },
+        { bar: "hopping channels", ms: 1300 },
+        { t: "SSID                 CH   dBm  SECURITY", c: "hi" },
+        ...nets.map((n) => ({ t: `${n.ssid.padEnd(20)} ${String(n.ch).padStart(3)}  ${n.sig}  ${n.sec}`, d: 120 })),
+        { t: `${nets.length} networks. see INTEL`, c: "info", set: () => ({ wifi: nets }) },
+      ];
+    },
+  },
   // ---------------- ACCESS ----------------
   {
     id: "breach",
@@ -210,6 +275,45 @@ export const ACTIONS: Action[] = [
             { t: "ghostwire: handshake 1/3 ... ok\nghostwire: handshake 2/3 ... ok\nghostwire: handshake 3/3 ... ok", d: 500 },
             { t: `tun0 up  mtu 1380  peer ${ip()}`, c: "ok", set: () => ({ tunnel: true }) },
           ],
+  },
+  {
+    id: "phish",
+    label: "PHISH",
+    group: "ACCESS",
+    words: ["phish", "lure"],
+    help: "send a staged lure to staff; a click gives a credential",
+    run: (s) => {
+      if (!s.staff.length) return fail("[x] no recipients", "    run OSINT first");
+      const h = selected(s);
+      const who = pick(s.staff);
+      return [
+        { t: `$ lure send --template "Q4 bonus schedule" --to ${s.staff.length} --landing sso-helixdyn.net`, c: "cmd" },
+        { bar: "delivering", ms: 1500 },
+        { t: `  delivered ${s.staff.length}/${s.staff.length}   opened ${rnd(2, 4)}   reported 0`, c: "dim", d: 600 },
+        { t: `  [+] ${who.name} (${who.role}) signed in on the landing page`, c: "ok", d: 900 },
+        { t: `credential added to ${h.name}`, c: "info", set: (o) => ({ hosts: o.hosts.map((x) => (x.ip === h.ip ? { ...x, findings: [...new Set([...x.findings, `valid credential: ${who.mail}`])] } : x)), ...noisy(8)(o) }) },
+      ];
+    },
+  },
+  {
+    id: "badge",
+    label: "BADGE",
+    group: "ACCESS",
+    words: ["badge", "rfid", "clone"],
+    help: "clone an access badge from a staff member",
+    run: (s) => {
+      if (!s.staff.length) return fail("[x] no one to target", "    run OSINT first");
+      if (s.badge) return fail(`[x] already holding ${s.badge}'s badge`);
+      const who = s.staff.find((p) => /Facilities/.test(p.role)) ?? s.staff[0];
+      return [
+        { t: `$ rfclone listen --reader lobby-07 --match "${who.name}"`, c: "cmd" },
+        { t: "  waiting for badge tap ...", c: "dim", d: 900 },
+        { bar: "reading card", ms: 1200 },
+        { t: `  card uid ${hex(8).toUpperCase()}  site 0x2F  level FAC-ALL`, d: 200 },
+        { t: `[+] badge of ${who.name} cloned`, c: "ok", set: () => ({ badge: who.name }) },
+        { t: "    FACILITY > DOORS now works", c: "dim" },
+      ];
+    },
   },
   // ---------------- POST ----------------
   {
@@ -310,6 +414,27 @@ export const ACTIONS: Action[] = [
       ];
     },
   },
+  {
+    id: "mail",
+    label: "MAIL",
+    group: "POST",
+    words: ["mail", "inbox", "email"],
+    help: "read the newest messages in the session's mailbox",
+    run: (s) => {
+      const blocked = needSession(s);
+      if (blocked) return blocked;
+      const h = selected(s);
+      const people = s.staff.length ? s.staff : STAFF;
+      const subjects = ["RE: ORBITAL-9 budget sign-off", "Server room access list (updated)", "Board pack - draft 3", "Uplink maintenance window", "FW: vendor invoice 88-2193", "Badge reader firmware", "Q4 headcount plan", "Do not forward: audit findings"];
+      const msgs = Array.from({ length: 6 }, () => ({ from: pick(people).mail, subject: pick(subjects), host: h.name }));
+      return [
+        { t: `$ siphon -s ${sessionOn(s, h.ip)!.id} mail --folder inbox --latest 6`, c: "cmd" },
+        { bar: "syncing mailbox", ms: 1100 },
+        ...msgs.map((m) => ({ t: `  ${m.from.padEnd(12)} ${m.subject}`, d: 110 })),
+        { t: `${msgs.length} messages. see INTEL`, c: "info", set: (o) => ({ inbox: [...msgs, ...o.inbox].slice(0, 30), ...noisy(5)(o) }) },
+      ];
+    },
+  },
   // ---------------- CRYPTO ----------------
   {
     id: "crack",
@@ -376,6 +501,39 @@ export const ACTIONS: Action[] = [
       ];
     },
   },
+  {
+    id: "forge",
+    label: "FORGE",
+    group: "CRYPTO",
+    words: ["forge", "cert", "sign"],
+    help: "mint a look-alike signing certificate",
+    run: (s) => {
+      const cn = `update.helixdyn.net`;
+      return [
+        { t: `$ certsmith forge --cn ${cn} --key ${s.keyId.slice(0, 8)} --valid 397d`, c: "cmd" },
+        { bar: "signing", ms: 1200 },
+        { t: `  serial ${hex(20)}\n  sha256 ${hex(32)}`, c: "dim", d: 200 },
+        { t: `certificate for ${cn} ready`, c: "ok", set: () => ({ cert: cn }) },
+      ];
+    },
+  },
+  {
+    id: "stego",
+    label: "STEGO",
+    group: "CRYPTO",
+    words: ["stego", "hide"],
+    help: "hide the latest pulled file inside an image",
+    run: (s) => {
+      const last = s.loot[s.loot.length - 1];
+      if (!last) return fail("[x] nothing to hide", "    EXFIL a file first");
+      const name = `IMG_${rnd(1000, 9999)}.png`;
+      return [
+        { t: `$ inkwell embed ${last.name} --into ${name} --bits 2`, c: "cmd" },
+        { bar: "embedding", ms: 1300 },
+        { t: `${name}  ${mb(last.size + rnd(2, 9))}  looks like a holiday photo`, c: "ok", set: (o) => ({ loot: [...o.loot.filter((l) => l !== last), { name, size: last.size }] }) },
+      ];
+    },
+  },
   // ---------------- OPSEC ----------------
   {
     id: "relay",
@@ -437,6 +595,100 @@ export const ACTIONS: Action[] = [
       { t: "operation reset", c: "warn", d: 300, set: () => initial() },
     ],
   },
+  {
+    id: "spoof",
+    label: "SPOOF",
+    group: "OPSEC",
+    words: ["spoof", "identity", "mac"],
+    help: "rotate our network identity; lowers detection a little",
+    run: () => [
+      { t: "$ ghostwire identity rotate --mac --hostname --ttl", c: "cmd" },
+      { t: `  mac      ${Array.from({ length: 6 }, () => hex(2)).join(":")}\n  hostname ${pick(["LT-ACC-", "WS-HR-", "MBP-"])}${rnd(100, 999)}\n  ttl      ${pick([64, 128])}`, d: 400 },
+      { t: "identity rotated", c: "ok", set: (o) => ({ detection: clamp(o.detection - 10) }) },
+    ],
+  },
+  {
+    id: "decoy",
+    label: "DECOY",
+    group: "OPSEC",
+    words: ["decoy", "distract"],
+    help: "trip harmless alarms elsewhere to pull analysts away",
+    run: () => [
+      { t: "$ chaff fire --pattern scanner-noise --zone guest --count 400", c: "cmd" },
+      { bar: "firing decoys", ms: 1200 },
+      { t: "soc attention shifted to the guest network", c: "ok", set: (o) => ({ detection: clamp(o.detection - 15) }) },
+    ],
+  },
+  // ---------------- FACILITY ----------------
+  {
+    id: "cams",
+    label: "CAMS",
+    group: "FACILITY",
+    words: ["cams", "cctv", "loop"],
+    help: "loop the camera feeds (or restore them)",
+    run: (s) => {
+      if (s.zones < 2) return fail("[x] camera controller not reachable", "    PIVOT into CORP first");
+      return s.cams
+        ? [
+            { t: "$ vms-ctl feed --all --live", c: "cmd" },
+            { t: "camera feeds live again", c: "ok", set: () => ({ cams: false }) },
+          ]
+        : [
+            { t: "$ vms-ctl feed --all --replay 00:04:00 --loop", c: "cmd" },
+            { bar: "buffering 4 minutes of footage", ms: 1500 },
+            { t: "6 feeds looping. see FACILITY", c: "ok", set: (o) => ({ cams: true, ...noisy(4)(o) }) },
+          ];
+    },
+  },
+  {
+    id: "doors",
+    label: "DOORS",
+    group: "FACILITY",
+    words: ["doors", "door"],
+    help: "unlock the next door with the cloned badge",
+    run: (s) => {
+      if (!s.badge) return fail("[x] no badge", "    ACCESS > BADGE first");
+      const door = DOORS.find((d) => !s.doors.includes(d));
+      if (!door) return fail("[x] every door is already open");
+      return [
+        { t: `$ pacs-ctl door "${door}" --as "${s.badge}" --hold 30s`, c: "cmd" },
+        { bar: "authorising", ms: 1000 },
+        { t: `${door}: unlocked`, c: "ok", set: (o) => ({ doors: [...o.doors, door], ...noisy(s.cams ? 1 : 6)(o) }) },
+      ];
+    },
+  },
+  {
+    id: "lights",
+    label: "LIGHTS",
+    group: "FACILITY",
+    words: ["lights", "power", "blackout"],
+    help: "cut or restore lighting on floors 2 to 9",
+    run: (s) => {
+      if (s.zones < 2) return fail("[x] building controller not reachable", "    PIVOT into CORP first");
+      return [
+        { t: `$ bms-ctl lighting --floors 2-9 --${s.lights ? "off" : "on"}`, c: "cmd" },
+        { bar: s.lights ? "switching relays off" : "switching relays on", ms: 900 },
+        { t: `lighting ${s.lights ? "off" : "restored"} on floors 2-9`, c: s.lights ? "warn" : "ok", set: (o) => ({ lights: !o.lights, ...noisy(5)(o) }) },
+      ];
+    },
+  },
+  {
+    id: "uplink",
+    label: "UPLINK",
+    group: "FACILITY",
+    words: ["uplink", "satellite", "sat"],
+    help: "take over the rooftop satellite uplink (needs CORE)",
+    run: (s) => {
+      if (s.zones < 3) return fail("[x] uplink controller is in CORE", "    keep pivoting: DMZ > CORP > CORE");
+      if (s.uplink) return fail("[x] uplink already ours");
+      return [
+        { t: "$ uplink-ctl attach 10.40.9.9:5600 --operator", c: "cmd" },
+        { t: `  az ${rnd(120, 240)}.${rnd(0, 9)}°  el ${rnd(20, 60)}.${rnd(0, 9)}°  lock ok`, c: "dim", d: 500 },
+        { bar: "handshaking with ground station", ms: 2200 },
+        { t: "[+] uplink control transferred", c: "ok", set: (o) => ({ uplink: true, ...noisy(10)(o) }) },
+      ];
+    },
+  },
 ];
 
 // The defenders caught up: every session dies.
@@ -460,3 +712,24 @@ export const HELP = [
   "  target <ip|name>  select a host",
   "  clear      clear the screen",
 ];
+
+// The suggested next move for the pad's hint line: the story, one step at a time.
+export function next(s: Sys): { id: string; why: string } | { id: null; why: string } {
+  const h = selected(s);
+  const sess = sessionOn(s, h.ip);
+  if (s.detection > 75 && s.sessions.length) return s.hops < 9 ? { id: "relay", why: "detection is high, add relay hops" } : { id: "scrub", why: "detection is high, clean the logs" };
+  if (!sess) {
+    if (!h.services.length) return { id: "probe", why: `find services on ${h.name}` };
+    if (!full(h.ip).findings.length) return { id: null, why: `nothing to break on ${h.name}, pick another host on RECON` };
+    if (!h.findings.length) return { id: "audit", why: `look for a weakness on ${h.name}` };
+    return { id: "breach", why: `open a session on ${h.name}` };
+  }
+  if (!sess.elevated) return { id: "elevate", why: "get admin rights in this session" };
+  if (!s.records.some((r) => r.host === sess.host)) return { id: "harvest", why: "collect password records" };
+  if (s.records.some((r) => !r.recovered)) return { id: "crack", why: "recover the harvested passwords" };
+  const unseen = WORLD.some((w) => w.zone > 0 && w.zone <= s.zones && !s.hosts.some((x) => x.ip === w.ip));
+  if (unseen) return { id: "sweep", why: "find the hosts in the new zone" };
+  if (s.zones < 3) return { id: "pivot", why: "route into the next zone" };
+  if (!s.uplink) return { id: "uplink", why: "the CORE is open, take the satellite uplink" };
+  return { id: "exfil", why: "pull data out, or try FACILITY" };
+}

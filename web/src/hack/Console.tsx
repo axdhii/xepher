@@ -1,14 +1,14 @@
 // The ops console: status bar, screen tabs, the active screen, a persistent
 // terminal and the action pad. Driven by scripts.ts.
 import { useEffect, useRef, useState } from "react";
-import { ACTIONS, GROUPS, HELP, caught, clock, exposure, find, initial, selected, type Action, type Cls, type Group, type Step, type Sys } from "./scripts";
+import { ACTIONS, GROUPS, HELP, caught, clock, exposure, find, initial, next, selected, type Action, type Cls, type Group, type Step, type Sys } from "./scripts";
 import { robot, MODE_THINK } from "../robot/state";
 import { SCREENS, type ScreenId } from "./screens";
 
 type Line = { t: string; c: Cls };
 export type Alert = { t: string; sev: "low" | "med" | "high" };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const bar = (k: number) => `${"█".repeat(Math.round(k * 24)).padEnd(24, "░")} ${String(Math.round(k * 100)).padStart(3)}%`;
+const bar = (k: number) => `${"━".repeat(Math.round(k * 24)).padEnd(24, "─")} ${String(Math.round(k * 100)).padStart(3)}%`;
 
 export default function Console() {
   const [sys, setSys] = useState<Sys>(initial);
@@ -16,7 +16,7 @@ export default function Console() {
   sysRef.current = sys;
   const [lines, setLines] = useState<Line[]>(() => [
     { t: "helix-ops // operator console", c: "hi" },
-    { t: "type 'help' or use the pad. start with SWEEP or PROBE.", c: "dim" },
+    { t: "type 'help', or follow the 'next' hint on the pad.", c: "dim" },
   ]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [screen, setScreen] = useState<ScreenId>("ops");
@@ -40,13 +40,13 @@ export default function Console() {
       await sleep(s.d ?? 70);
       if (id !== runId.current) return; // interrupted by another action
       if (s.bar) {
-        print(`${s.bar}  ${bar(0)}`, "warn");
+        print(`${s.bar}  ${bar(0)}`, "bar");
         const t0 = performance.now();
         for (let k = 0; k < 1; ) {
           await sleep(70);
           if (id !== runId.current) return;
           k = Math.min(1, (performance.now() - t0) / s.ms!);
-          setLines((l) => [...l.slice(0, -1), { t: `${s.bar}  ${bar(k)}`, c: "warn" }]);
+          setLines((l) => [...l.slice(0, -1), { t: `${s.bar}  ${bar(k)}`, c: "bar" }]);
         }
       }
       if (s.t !== undefined) print(s.t, s.c);
@@ -61,8 +61,8 @@ export default function Console() {
   function act(a: Action, echo = true) {
     if (runId.current && sysRef.current.activity) print("^C", "dim");
     if (echo) print(`${prompt(sysRef.current)} ${a.words[0]}`, "dim");
-    const sev = ({ RECON: "low", ACCESS: "high", POST: "med", CRYPTO: "low", OPSEC: "low" } as const)[a.group];
-    if (a.group !== "CRYPTO" && a.id !== "relay") alert(`${a.group.toLowerCase()} activity from ${pickSrc()} -> ${selected(sysRef.current).name}`, sev);
+    const sev = ({ RECON: "low", ACCESS: "high", POST: "med", CRYPTO: "low", OPSEC: "low", FACILITY: "med" } as const)[a.group];
+    if (a.group !== "CRYPTO" && a.group !== "OPSEC") alert(`${a.group.toLowerCase()} ${pickSrc()} → ${selected(sysRef.current).name.split(".")[0]}`, sev);
     play(a.id, a.run(sysRef.current));
   }
 
@@ -86,6 +86,17 @@ export default function Console() {
     act(a, false);
   }
 
+  // F1..F8 switch screens on desktop.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const n = /^F(\d)$/.exec(e.key);
+      const x = n && SCREENS[+n[1] - 1];
+      if (x) (e.preventDefault(), setScreen(x.id));
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
+
   // Detection rises while sessions are open; the SOC's alert feed gets busier.
   useEffect(() => {
     const id = setInterval(() => {
@@ -99,6 +110,8 @@ export default function Console() {
   }, []);
 
   const Screen = SCREENS.find((x) => x.id === screen)!.view;
+  const hint = next(sys);
+  const hintGroup = ACTIONS.find((a) => a.id === hint.id)?.group;
   return (
     <div className={`hack ${sys.detection > 80 ? "hot" : ""}`}>
       <Status sys={sys} />
@@ -130,13 +143,24 @@ export default function Console() {
       <nav className="pad">
         <div className="groups">
           {GROUPS.map((g) => (
-            <button key={g} className={group === g ? "on" : ""} onClick={() => setGroup(g)}>{g}</button>
+            <button key={g} className={`${group === g ? "on" : ""} ${hintGroup === g ? "hint" : ""}`} onClick={() => setGroup(g)}>{g}</button>
           ))}
-          <span className="dim target">target: {selected(sys).name}</span>
         </div>
+        <button
+          className="next"
+          disabled={!hint.id || !!sys.activity}
+          onClick={() => {
+            const a = ACTIONS.find((x) => x.id === hint.id)!;
+            setGroup(a.group);
+            act(a);
+          }}
+        >
+          <span className="dim">next</span> <b>{hint.id ? ACTIONS.find((a) => a.id === hint.id)!.label : "—"}</b> <span>{hint.why}</span>
+          <span className="dim target">target {selected(sys).name.split(".")[0]}</span>
+        </button>
         <div className="actions">
           {ACTIONS.filter((a) => a.group === group).map((a) => (
-            <button key={a.id} title={a.help} className={sys.activity === a.id ? "on" : ""} onClick={() => act(a)}>
+            <button key={a.id} title={a.help} className={`${sys.activity === a.id ? "on" : ""} ${hint.id === a.id ? "hint" : ""}`} onClick={() => act(a)}>
               <b>{a.label}</b>
               <small>{a.help}</small>
             </button>
@@ -168,12 +192,12 @@ function Status({ sys }: { sys: Sys }) {
     <div className="statusbar">
       <span className={sys.tunnel ? "ok" : "dim"}>{sys.tunnel ? "● tun0" : "○ tun0"}</span>
       <span>sessions <b>{sys.sessions.length}</b></span>
-      <span>hosts <b>{sys.hosts.length}</b> / owned <b>{sys.hosts.filter((h) => h.owned).length}</b></span>
+      <span>owned <b>{sys.hosts.filter((h) => h.owned).length}/{sys.hosts.length}</b></span>
       <span>relays <b>{sys.hops}</b></span>
       <span className="meter">
-        detection <u><i style={{ width: `${det}%` }} className={det > 70 ? "hot" : det > 35 ? "warm" : ""} /></u> {det}%
+        detect <u><i style={{ width: `${det}%` }} className={det > 70 ? "hot" : det > 35 ? "warm" : ""} /></u> {det}%
       </span>
-      <span className="dim">{t}</span>
+      <span className="dim clock">{t}</span>
     </div>
   );
 }
